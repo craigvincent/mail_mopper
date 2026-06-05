@@ -490,19 +490,5 @@ public sealed class MailMopperApp
         return (AppTab)((current - 1 + count) % count);
     }
 
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1_073_741_824 => $"{bytes / 1_073_741_824.0:F1} GB",
-        >= 1_048_576 => $"{bytes / 1_048_576.0:F1} MB",
-        >= 1024 => $"{bytes / 1024.0:F1} KB",
-        _ => $"{bytes} B"
-    };
-}
-
-public static class Centering
-{
-    public static IRenderable Center(IRenderable content, int availableHeight)
-    {
-        return Align.Center(content, VerticalAlignment.Middle);
-    }
+    private static string FormatSize(long bytes) => ReviewService.FormatSize(bytes);
 }

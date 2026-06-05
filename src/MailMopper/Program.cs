@@ -32,6 +32,7 @@ services.AddTransient<GmailAuthService>();
 services.AddTransient<RuleClassifier>();
 services.AddTransient<DatabaseService>();
 services.AddTransient<ModelTrainerService>();
+services.AddTransient<ReviewService>();
 services.AddTransient<ReviewApp>();
 services.AddTransient<GmailFetchService>();
 services.AddTransient<GmailServices>();

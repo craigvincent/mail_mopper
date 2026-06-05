@@ -1,7 +1,7 @@
 using System.Globalization;
 using MailMopper.Data;
 using MailMopper.Models;
-using Microsoft.EntityFrameworkCore;
+using MailMopper.Services;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -10,18 +10,12 @@ namespace MailMopper.Tui.Views;
 public sealed class ReviewView : IAppView
 {
     private readonly AppDbContext _db;
+    private readonly ReviewService _review;
 
     private enum SubView { Dashboard, Category, Sender, YearSelect }
     private SubView _subView = SubView.Dashboard;
 
-    private List<Classification> _allReviewable = [];
-    private List<ReviewCategoryGroup> _groups = [];
-    private bool _dirty;
-    private int _unsavedActions;
-    private int _previouslyTrashedCount;
-    private long _previouslyTrashedSize;
-    private int? _yearFilter;
-    private List<int> _availableYears = [];
+    private List<Classification> _senderEmails = [];
 
     private int _selectedCategory = -1;
     private int _categoryPage;
@@ -32,7 +26,6 @@ public sealed class ReviewView : IAppView
 
     private ReviewSenderGroup? _activeSender;
     private int _senderPage;
-    private List<Classification> _senderEmails = [];
 
     private char? _pendingCatCmd;
     private int _yearSelectIndex;
@@ -45,14 +38,15 @@ public sealed class ReviewView : IAppView
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
 
-    public ReviewView(AppDbContext db)
+    public ReviewView(AppDbContext db, ReviewService review)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _review = review ?? throw new ArgumentNullException(nameof(review));
     }
 
     public IRenderable GetContent(int availableHeight)
     {
-        _ = LoadDataIfNeeded();
+        _ = _review.LoadDataAsync();
 
         return _subView switch
         {
@@ -99,7 +93,7 @@ public sealed class ReviewView : IAppView
                 break;
         }
 
-        if (_dirty)
+        if (_review.IsDirty)
         {
             await AutoSaveIfNeeded(ct);
             return ViewCommand.MarkDirty;
@@ -108,116 +102,15 @@ public sealed class ReviewView : IAppView
         return ViewCommand.None;
     }
 
-    private async Task LoadDataIfNeeded()
-    {
-        if (_groups.Count > 0)
-            return;
+    private static string FormatDecision(ReviewDecision d) => ReviewService.FormatDecision(d);
 
-        try
-        {
-            var all = await _db.Classifications
-                .Include(c => c.Email)
-                .Where(c => c.Email != null)
-                .ToListAsync();
+    private static string FormatSize(long bytes) => ReviewService.FormatSize(bytes);
 
-            var trashedIds = await _db.Actions
-                .Where(a => a.Action == "trash")
-                .Select(a => a.MessageId)
-                .Distinct()
-                .ToListAsync();
-            var trashedSet = new HashSet<string>(trashedIds);
+    private void MarkDirty(int count = 1) { _review.MarkDirty(count); RequestRender?.Invoke(); }
 
-            bool retroFixed = false;
-            foreach (var c in all)
-            {
-                if (c.ReviewDecision != ReviewDecision.Executed && trashedSet.Contains(c.MessageId))
-                {
-                    c.ReviewDecision = ReviewDecision.Executed;
-                    retroFixed = true;
-                }
-            }
-            if (retroFixed)
-                await _db.SaveChangesAsync();
+    private async Task AutoSaveIfNeeded(CancellationToken ct) => await _review.AutoSaveIfNeededAsync(ct);
 
-            var executed = all.Where(c => c.ReviewDecision == ReviewDecision.Executed).ToList();
-            _previouslyTrashedCount = executed.Count;
-            _previouslyTrashedSize = executed.Sum(c => c.Email?.SizeEstimate ?? 0);
-
-            _allReviewable = all
-                .Where(c => c.ReviewDecision != ReviewDecision.Executed)
-                .ToList();
-
-            _availableYears = _allReviewable
-                .Where(c => c.Email?.Date != null)
-                .Select(c => c.Email!.Date!.Value.Year)
-                .Distinct()
-                .OrderBy(y => y)
-                .ToList();
-
-            RebuildGroups();
-        }
-        catch
-        {
-        }
-    }
-
-    private void RebuildGroups()
-    {
-        var filtered = _yearFilter.HasValue
-            ? _allReviewable.Where(c => c.Email?.Date?.Year == _yearFilter.Value).ToList()
-            : _allReviewable;
-
-        _groups = filtered
-            .GroupBy(c => c.Category)
-            .OrderByDescending(g => g.Count())
-            .Select(g => new ReviewCategoryGroup
-            {
-                Category = g.Key,
-                Classifications = g.ToList(),
-                Decision = ComputeGroupDecision(g)
-            })
-            .ToList();
-    }
-
-    private static ReviewDecision ComputeGroupDecision(IGrouping<ClassificationCategory, Classification> g)
-    {
-        if (g.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash))
-            return ReviewDecision.ApproveTrash;
-        if (g.All(c => c.ReviewDecision == ReviewDecision.Keep))
-            return ReviewDecision.Keep;
-        if (g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted))
-            return ReviewDecision.Whitelisted;
-        return ReviewDecision.Pending;
-    }
-
-    private static string FormatDecision(ReviewDecision d) => d switch
-    {
-        ReviewDecision.ApproveTrash => "[red]Trash[/]",
-        ReviewDecision.Keep => "[green]Keep[/]",
-        ReviewDecision.Whitelisted => "[cyan]Whitelisted[/]",
-        _ => "[yellow]Pending[/]"
-    };
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1_073_741_824 => $"{bytes / 1_073_741_824.0:F1} GB",
-        >= 1_048_576 => $"{bytes / 1_048_576.0:F1} MB",
-        >= 1024 => $"{bytes / 1024.0:F1} KB",
-        _ => $"{bytes} B"
-    };
-
-    private void MarkDirty(int count = 1) { _dirty = true; _unsavedActions += count; RequestRender?.Invoke(); }
-
-    private async Task AutoSaveIfNeeded(CancellationToken ct)
-    {
-        if (_unsavedActions >= AutoSaveThreshold)
-        {
-            await _db.SaveChangesAsync(ct);
-            _unsavedActions = 0;
-        }
-    }
-
-    private async Task SaveAsync(CancellationToken ct) { await _db.SaveChangesAsync(ct); _unsavedActions = 0; }
+    private async Task SaveAsync(CancellationToken ct) => await _review.SaveAsync(ct);
 
     // ── Dashboard ──────────────────────────────────────────────────
 
@@ -225,26 +118,26 @@ public sealed class ReviewView : IAppView
     {
         var parts = new List<IRenderable>();
 
-        var yearLabel = _yearFilter.HasValue ? $"[bold cyan]{_yearFilter.Value}[/]" : "[dim]All years[/]";
+        var yearLabel = _review.YearFilter.HasValue ? $"[bold cyan]{_review.YearFilter.Value}[/]" : "[dim]All years[/]";
         var headerLine = $"[bold blue]Review — Categories[/]  Year: {yearLabel}";
         parts.Add(new Rule(headerLine).LeftJustified());
 
-        if (_availableYears.Count > 1)
+        if (_review.AvailableYears.Count > 1)
             parts.Add(BuildYearBreakdown());
 
         parts.Add(BuildCategoryTable());
 
-        var totalRemaining = _groups.Sum(g => g.Classifications.Count);
-        var totalSize = _groups.Sum(g => g.Classifications.Sum(c => c.Email?.SizeEstimate ?? 0));
-        var pending = _groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Pending));
-        var trash = _groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.ApproveTrash));
-        var keep = _groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Keep));
+        var totalRemaining = _review.Groups.Sum(g => g.Classifications.Count);
+        var totalSize = _review.Groups.Sum(g => g.Classifications.Sum(c => c.Email?.SizeEstimate ?? 0));
+        var pending = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Pending));
+        var trash = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.ApproveTrash));
+        var keep = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Keep));
 
         parts.Add(new Markup($"  [bold]Total:[/] {totalRemaining:N0} emails ({FormatSize(totalSize)})  │  [yellow]Pending: {pending:N0}[/]  [red]Trash: {trash:N0}[/]  [green]Keep: {keep:N0}[/]"));
-        if (_previouslyTrashedCount > 0)
-            parts.Add(new Markup($"  [dim]Already executed: {_previouslyTrashedCount:N0} ({FormatSize(_previouslyTrashedSize)})[/]"));
-        if (_dirty)
-            parts.Add(new Markup($"  [dim italic]Unsaved: {_unsavedActions} actions[/]"));
+        if (_review.PreviouslyTrashedCount > 0)
+            parts.Add(new Markup($"  [dim]Already executed: {_review.PreviouslyTrashedCount:N0} ({FormatSize(_review.PreviouslyTrashedSize)})[/]"));
+        if (_review.IsDirty)
+            parts.Add(new Markup($"  [dim italic]Unsaved: {_review.UnsavedActions} actions[/]"));
 
         return new Rows(parts);
     }
@@ -254,7 +147,7 @@ public sealed class ReviewView : IAppView
 
     private IRenderable BuildYearBreakdown()
     {
-        var yearBreakdown = _allReviewable
+        var yearBreakdown = _review.AllReviewable
             .Where(c => c.Email?.Date != null)
             .GroupBy(c => c.Email!.Date!.Value.Year)
             .OrderBy(g => g.Key)
@@ -268,17 +161,17 @@ public sealed class ReviewView : IAppView
         table.AddColumn("[bold]Year[/]");
         foreach (var yb in yearBreakdown)
         {
-            var highlight = _yearFilter == yb.Year ? "[bold cyan]" : "[dim]";
+            var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
             table.AddColumn(new TableColumn($"{highlight}{yb.Year}[/]").RightAligned());
         }
         table.AddRow(_emailsHeader.Concat(yearBreakdown.Select(yb =>
         {
-            var highlight = _yearFilter == yb.Year ? "[bold cyan]" : "[dim]";
+            var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
             return $"{highlight}{yb.Count:N0}[/]";
         })).ToArray());
         table.AddRow(_sizeHeader.Concat(yearBreakdown.Select(yb =>
         {
-            var highlight = _yearFilter == yb.Year ? "[bold cyan]" : "[dim]";
+            var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
             return $"{highlight}{FormatSize(yb.Size)}[/]";
         })).ToArray());
         return table;
@@ -296,9 +189,9 @@ public sealed class ReviewView : IAppView
             .AddColumn("[bold]Top Domain[/]")
             .AddColumn("[bold]Progress[/]");
 
-        for (int i = 0; i < _groups.Count; i++)
+        for (int i = 0; i < _review.Groups.Count; i++)
         {
-            var g = _groups[i];
+            var g = _review.Groups[i];
             var count = g.Classifications.Count;
             var senderCount = g.Classifications.Select(c => c.Email?.From).Distinct().Count();
             var size = FormatSize(g.Classifications.Sum(c => c.Email?.SizeEstimate ?? 0));
@@ -348,15 +241,15 @@ public sealed class ReviewView : IAppView
 
         if (upper == 'S')
         {
-            if (_dirty)
+            if (_review.IsDirty)
                 await SaveAsync(ct);
             return;
         }
 
-        if (int.TryParse(upper.ToString(), out var num) && num >= 1 && num <= _groups.Count)
+        if (int.TryParse(upper.ToString(), out var num) && num >= 1 && num <= _review.Groups.Count)
         {
             _selectedCategory = num - 1;
-            _activeCategoryGroup = _groups[_selectedCategory];
+            _activeCategoryGroup = _review.Groups[_selectedCategory];
             _categoryPage = 0;
             _hidingDecided = true;
             _lastSelectedSenderIdx = -1;
@@ -375,7 +268,7 @@ public sealed class ReviewView : IAppView
         };
 
         var choices = new List<string> { "All years" };
-        choices.AddRange(_availableYears.Select(y => y.ToString(CultureInfo.InvariantCulture)));
+        choices.AddRange(_review.AvailableYears.Select(y => y.ToString(CultureInfo.InvariantCulture)));
 
         for (int i = 0; i < choices.Count; i++)
         {
@@ -408,7 +301,7 @@ public sealed class ReviewView : IAppView
         if (key.Key == ConsoleKey.DownArrow)
         {
             _yearInputDigits = "";
-            var maxIndex = _availableYears.Count;
+            var maxIndex = _review.AvailableYears.Count;
             if (_yearSelectIndex < maxIndex)
                 _yearSelectIndex++;
             return Task.CompletedTask;
@@ -418,7 +311,7 @@ public sealed class ReviewView : IAppView
         {
             if (_yearInputDigits.Length > 0
                 && int.TryParse(_yearInputDigits, out var parsed)
-                && parsed >= 1 && parsed <= _availableYears.Count + 1)
+                && parsed >= 1 && parsed <= _review.AvailableYears.Count + 1)
             {
                 _yearSelectIndex = parsed - 1;
             }
@@ -448,8 +341,8 @@ public sealed class ReviewView : IAppView
 
     private void EnterYearSelect()
     {
-        _yearSelectIndex = _yearFilter.HasValue
-            ? _availableYears.IndexOf(_yearFilter.Value) + 1
+        _yearSelectIndex = _review.YearFilter.HasValue
+            ? _review.IndexOfYear(_review.YearFilter.Value) + 1
             : 0;
         _yearInputDigits = "";
         _subView = SubView.YearSelect;
@@ -459,15 +352,15 @@ public sealed class ReviewView : IAppView
     {
         if (_yearSelectIndex == 0)
         {
-            _yearFilter = null;
+            _review.YearFilter = null;
         }
         else
         {
             var yearIdx = _yearSelectIndex - 1;
-            if (yearIdx >= 0 && yearIdx < _availableYears.Count)
-                _yearFilter = _availableYears[yearIdx];
+            if (yearIdx >= 0 && yearIdx < _review.AvailableYears.Count)
+                _review.YearFilter = _review.AvailableYears[yearIdx];
         }
-        RebuildGroups();
+        _review.RebuildGroups();
         _subView = SubView.Dashboard;
         _yearInputDigits = "";
     }
@@ -476,23 +369,8 @@ public sealed class ReviewView : IAppView
 
     private void BuildCategorySenderList()
     {
-        if (_activeCategoryGroup == null)
-            return;
-
-        _categorySenders = _activeCategoryGroup.Classifications
-            .GroupBy(c => new { Domain = c.Email?.FromDomain ?? "unknown", Email = c.Email?.From ?? "unknown" })
-            .OrderByDescending(g => g.Count())
-            .Select(g => new ReviewSenderGroup
-            {
-                From = g.Key.Email,
-                Domain = g.Key.Domain,
-                Classifications = g.ToList(),
-                Decision = g.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash) ? ReviewDecision.ApproveTrash
-                         : g.All(c => c.ReviewDecision == ReviewDecision.Keep) ? ReviewDecision.Keep
-                         : g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted
-                         : ReviewDecision.Pending
-            })
-            .ToList();
+        if (_activeCategoryGroup != null)
+            _categorySenders = ReviewService.BuildSenderList(_activeCategoryGroup);
     }
 
     private IRenderable BuildCategory()
@@ -516,7 +394,7 @@ public sealed class ReviewView : IAppView
         var start = _categoryPage * PageSize;
         var pageSenders = filtered.Skip(start).Take(PageSize).ToList();
 
-        var yearInfo = _yearFilter.HasValue ? $" [cyan]({_yearFilter.Value})[/]" : "";
+        var yearInfo = _review.YearFilter.HasValue ? $" [cyan]({_review.YearFilter.Value})[/]" : "";
         var totalDecided = _categorySenders.Count(s => s.Decision != ReviewDecision.Pending);
         var pct = _categorySenders.Count > 0 ? totalDecided * 100 / _categorySenders.Count : 100;
         var bar = new string('█', pct / 5) + new string('░', 20 - pct / 5);
@@ -663,9 +541,7 @@ public sealed class ReviewView : IAppView
         {
             var target = filtered[num - 1];
             var decision = cmd == 'T' ? ReviewDecision.ApproveTrash : ReviewDecision.Keep;
-            foreach (var c in target.Classifications)
-                c.ReviewDecision = decision;
-            target.Decision = decision;
+            ReviewService.ApplySenderDecision(target, decision);
             MarkDirty(target.Classifications.Count);
             await AutoSaveIfNeeded(ct);
             _lastSelectedSenderIdx = FindNextPendingIndex(filtered, num - 1);
@@ -684,38 +560,19 @@ public sealed class ReviewView : IAppView
     {
         if (_activeCategoryGroup == null)
             return;
-        var pending = _activeCategoryGroup.Classifications.Where(c => c.ReviewDecision == ReviewDecision.Pending).ToList();
-        if (pending.Count == 0)
-            return;
-        foreach (var c in pending)
-            c.ReviewDecision = decision;
-        MarkDirty(pending.Count);
+        _review.ApplyBulkDecision(_activeCategoryGroup, decision);
         await AutoSaveIfNeeded(ct);
         BuildCategorySenderList();
+        RequestRender?.Invoke();
     }
 
     private static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)
-    {
-        for (int i = current + 1; i < senders.Count; i++)
-            if (senders[i].Decision == ReviewDecision.Pending)
-                return i;
-        for (int i = 0; i < current; i++)
-            if (senders[i].Decision == ReviewDecision.Pending)
-                return i;
-        return -1;
-    }
+        => ReviewService.FindNextPendingIndex(senders, current);
 
     private void UpdateCategoryDecision()
     {
-        if (_activeCategoryGroup == null)
-            return;
-        _activeCategoryGroup.Decision = _activeCategoryGroup.Classifications switch
-        {
-            var c when c.All(x => x.ReviewDecision == ReviewDecision.ApproveTrash) => ReviewDecision.ApproveTrash,
-            var c when c.All(x => x.ReviewDecision == ReviewDecision.Keep) => ReviewDecision.Keep,
-            var c when c.All(x => x.ReviewDecision == ReviewDecision.Whitelisted) => ReviewDecision.Whitelisted,
-            _ => ReviewDecision.Pending,
-        };
+        if (_activeCategoryGroup != null)
+            ReviewService.UpdateCategoryDecision(_activeCategoryGroup);
     }
 
     // ── Sender View ────────────────────────────────────────────────
@@ -816,9 +673,7 @@ public sealed class ReviewView : IAppView
     {
         if (_activeSender == null)
             return;
-        foreach (var c in _activeSender.Classifications)
-            c.ReviewDecision = decision;
-        _activeSender.Decision = decision;
+        ReviewService.ApplySenderDecision(_activeSender, decision);
         MarkDirty(_activeSender.Classifications.Count);
     }
 
@@ -826,35 +681,7 @@ public sealed class ReviewView : IAppView
     {
         if (_activeSender == null)
             return;
-        var existing = await _db.Whitelist
-            .AnyAsync(w => w.Pattern == _activeSender.Domain, ct);
-        if (!existing)
-        {
-            _db.Whitelist.Add(new WhitelistEntry
-            {
-                Pattern = _activeSender.Domain,
-                PatternType = "domain",
-                CreatedAt = DateTimeOffset.UtcNow
-            });
-            await _db.SaveChangesAsync(ct);
-        }
-        ApplySenderDecision(ReviewDecision.Whitelisted);
+        await _review.WhitelistDomainAsync(_activeSender.Domain, _activeSender, ct);
+        MarkDirty(_activeSender.Classifications.Count);
     }
-}
-
-// ── Data types ─────────────────────────────────────────────────────
-
-internal sealed class ReviewCategoryGroup
-{
-    public ClassificationCategory Category { get; set; }
-    public List<Classification> Classifications { get; set; } = [];
-    public ReviewDecision Decision { get; set; }
-}
-
-internal sealed class ReviewSenderGroup
-{
-    public string From { get; set; } = "";
-    public string Domain { get; set; } = "";
-    public List<Classification> Classifications { get; set; } = [];
-    public ReviewDecision Decision { get; set; }
 }
