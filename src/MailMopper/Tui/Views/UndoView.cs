@@ -14,6 +14,7 @@ public sealed class UndoView : IAppView
     private readonly GmailAuthService _authService;
 
     public Action? RequestRender { get; set; }
+    public Action? RequestRenderImmediate { get; set; }
 
     private enum State { Idle, Confirm, Running, Complete, Error }
     private State _state = State.Idle;
@@ -25,6 +26,7 @@ public sealed class UndoView : IAppView
     private int _lastUndoneCount;
     private List<SessionInfo> _sessions = [];
     private int _selectedSession = -1;
+    private bool _sessionsDirty = true;
 
     public UndoView(
         DatabaseService dbService,
@@ -66,8 +68,6 @@ public sealed class UndoView : IAppView
             content.Add(new Markup("\n[red]Not authenticated![/] Return to [bold]Home[/] and press [bold]A[/]"));
             return Align.Center(new Rows(content), VerticalAlignment.Middle);
         }
-
-        RefreshSessions();
 
         if (_sessions.Count == 0)
         {
@@ -211,7 +211,7 @@ public sealed class UndoView : IAppView
         if (!_session.IsAuthenticated)
             return ViewCommand.None;
 
-        RefreshSessions();
+        await RefreshSessionsAsync(ct);
         var trashSessions = _sessions.Where(s => s.Action == "trash").ToList();
 
         var upper = char.ToUpperInvariant(key.KeyChar);
@@ -259,12 +259,16 @@ public sealed class UndoView : IAppView
         return ViewCommand.None;
     }
 
-    private void RefreshSessions()
+    private async Task RefreshSessionsAsync(CancellationToken ct)
     {
+        if (!_sessionsDirty)
+            return;
+
         try
         {
-            var sessions = _dbService.GetSessionsAsync(CancellationToken.None).Result;
+            var sessions = await _dbService.GetSessionsAsync(ct);
             _sessions = sessions.ToList();
+            _sessionsDirty = false;
         }
         catch
         {
@@ -296,16 +300,22 @@ public sealed class UndoView : IAppView
             try
             {
                 _lastUndoneCount = await _actionService.UndoSessionAsync(sessionId, progress, token);
+                _sessionsDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
+                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
+                _sessionsDirty = true;
                 _state = State.Idle;
+                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
+                _sessionsDirty = true;
                 _state = State.Error;
+                RequestRenderImmediate?.Invoke();
             }
         }, token);
     }

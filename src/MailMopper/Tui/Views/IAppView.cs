@@ -22,6 +22,7 @@ public enum ViewCommand
 public interface IAppView
 {
     Action? RequestRender { get; set; }
+    Action? RequestRenderImmediate { get; set; }
     IRenderable GetContent(int availableHeight);
     string GetFooterHints();
     Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct);

@@ -104,6 +104,8 @@ mopper execute               # 7. Take out the trash. My favorite part
 ```bash
 mopper stats                 # Admire my work - show statistics
 mopper undo <id>             # Fine. Untrash a session. Quitter
+mopper repair-dates          # Fix dates I got wrong the first time. I'm only human
+mopper reset                 # Burn it all down. Start from scratch. No, really, are you sure?
 mopper run                   # Full pipeline - let me handle everything
 ```
 

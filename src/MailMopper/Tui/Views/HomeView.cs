@@ -12,6 +12,7 @@ public sealed class HomeView : IAppView
     private readonly GmailSession _session;
 
     public Action? RequestRender { get; set; }
+    public Action? RequestRenderImmediate { get; set; }
 
     public HomeView(AppDbContext db, DatabaseService dbService, GmailSession session)
     {

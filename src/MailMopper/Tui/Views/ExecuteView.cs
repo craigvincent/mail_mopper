@@ -1,7 +1,6 @@
 using MailMopper.Config;
 using MailMopper.Data;
 using MailMopper.Services;
-using Microsoft.EntityFrameworkCore;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -16,6 +15,7 @@ public sealed class ExecuteView : IAppView
     private readonly GmailAuthService _authService;
 
     public Action? RequestRender { get; set; }
+    public Action? RequestRenderImmediate { get; set; }
 
     private enum State { Idle, Preview, Confirm, Running, Complete, Error }
     private State _state = State.Idle;
@@ -27,6 +27,7 @@ public sealed class ExecuteView : IAppView
     private ActionSummary? _lastResult;
     private int _pendingCount;
     private long _pendingSize;
+    private bool _pendingDirty = true;
 
     public ExecuteView(
         ActionService actionService,
@@ -266,15 +267,20 @@ public sealed class ExecuteView : IAppView
 
     private void RefreshPendingCounts()
     {
+        if (!_pendingDirty)
+            return;
+
         try
         {
-            var approved = _db.Classifications
-                .Where(c => c.ReviewDecision == Models.ReviewDecision.ApproveTrash)
-                .Include(c => c.Email)
-                .ToList();
+            var query = from c in _db.Classifications
+                        join e in _db.Emails on c.MessageId equals e.MessageId
+                        where c.ReviewDecision == Models.ReviewDecision.ApproveTrash
+                        select e.SizeEstimate;
 
-            _pendingCount = approved.Count;
-            _pendingSize = approved.Sum(c => c.Email?.SizeEstimate ?? 0);
+            var sizes = query.ToList();
+            _pendingCount = sizes.Count;
+            _pendingSize = sizes.Sum();
+            _pendingDirty = false;
         }
         catch
         {
@@ -304,16 +310,22 @@ public sealed class ExecuteView : IAppView
             try
             {
                 _lastResult = await _actionService.TrashApprovedAsync(false, progress, token);
+                _pendingDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
+                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
+                _pendingDirty = true;
                 _state = State.Idle;
+                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
+                _pendingDirty = true;
                 _state = State.Error;
+                RequestRenderImmediate?.Invoke();
             }
         }, token);
     }

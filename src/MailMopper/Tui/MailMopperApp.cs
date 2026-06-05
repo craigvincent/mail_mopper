@@ -25,6 +25,14 @@ public sealed class MailMopperApp
     private Task? _authTask;
     private volatile bool _needsRender = true;
     private DateTime _lastRenderTime = DateTime.MinValue;
+    private string? _cachedUserEmail;
+    private bool _userEmailFetched;
+    private AppSnapshot _cachedStats = new(0, 0, 0, 0, 0);
+    private bool _statsDirty = true;
+    private int _lastWindowWidth;
+    private int _lastWindowHeight;
+
+    private sealed record AppSnapshot(int TotalEmails, int Classified, int Approved, int Trashed, long TotalSize);
 
     private static readonly (AppTab Tab, string Label, string Hotkey)[] _tabs =
     [
@@ -61,7 +69,10 @@ public sealed class MailMopperApp
         _views[(int)AppTab.Undo] = undoView ?? throw new ArgumentNullException(nameof(undoView));
 
         foreach (var view in _views)
+        {
             view.RequestRender = RequestRender;
+            view.RequestRenderImmediate = RequestRenderImmediate;
+        }
     }
 
     internal void RequestRender()
@@ -69,6 +80,25 @@ public sealed class MailMopperApp
         var now = DateTime.UtcNow;
         if ((now - _lastRenderTime).TotalMilliseconds >= 1000)
             _needsRender = true;
+    }
+
+    internal void RequestRenderImmediate() => _needsRender = true;
+
+    private bool TryDetectResize()
+    {
+        try
+        {
+            var w = Console.WindowWidth;
+            var h = Console.WindowHeight;
+            if (w != _lastWindowWidth || h != _lastWindowHeight)
+            {
+                _lastWindowWidth = w;
+                _lastWindowHeight = h;
+                return true;
+            }
+        }
+        catch (IOException) { }
+        return false;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -100,9 +130,12 @@ public sealed class MailMopperApp
             {
                 ct.ThrowIfCancellationRequested();
 
+                if (TryDetectResize())
+                    _needsRender = true;
+
                 if (_needsRender)
                 {
-                    BuildAndRender();
+                    RenderFrame();
                     _needsRender = false;
                     _lastRenderTime = DateTime.UtcNow;
                 }
@@ -111,6 +144,8 @@ public sealed class MailMopperApp
                 while (!_needsRender && !Console.KeyAvailable && DateTime.UtcNow < deadline)
                 {
                     await Task.Delay(16, ct);
+                    if (TryDetectResize())
+                        _needsRender = true;
                 }
 
                 if (Console.KeyAvailable)
@@ -130,13 +165,13 @@ public sealed class MailMopperApp
         }
     }
 
-    private void BuildAndRender()
+    private void RenderFrame()
     {
         try
         {
+            _statsDirty = true;
             AnsiConsole.Clear();
-            var layout = BuildLayout();
-            AnsiConsole.Write(layout);
+            AnsiConsole.Write(BuildLayout());
         }
         catch (IOException)
         {
@@ -217,33 +252,46 @@ public sealed class MailMopperApp
 
     private string GetUserEmail()
     {
+        if (_userEmailFetched)
+            return _cachedUserEmail ?? "Gmail";
+
         try
         {
             var profile = _session.Service?.Users.GetProfile("me").ExecuteAsync(CancellationToken.None).Result;
-            return profile?.EmailAddress ?? "Gmail";
+            _cachedUserEmail = profile?.EmailAddress;
+            _userEmailFetched = true;
+            return _cachedUserEmail ?? "Gmail";
         }
         catch
         {
+            _cachedUserEmail = null;
+            _userEmailFetched = true;
             return "Gmail";
         }
     }
 
     private string GetStatsLine()
     {
-        try
+        if (_statsDirty)
         {
-            var totalEmails = _db.Emails.Count();
-            var classified = _db.Classifications.Select(c => c.MessageId).Distinct().Count();
-            var approved = _db.Classifications.Count(c => c.ReviewDecision == Models.ReviewDecision.ApproveTrash);
-            var trashed = _db.Actions.Count(a => a.Action == "trash");
-            var totalSize = _db.Emails.Sum(e => e.SizeEstimate);
+            try
+            {
+                var totalEmails = _db.Emails.Count();
+                var classified = _db.Classifications.Select(c => c.MessageId).Distinct().Count();
+                var approved = _db.Classifications.Count(c => c.ReviewDecision == Models.ReviewDecision.ApproveTrash);
+                var trashed = _db.Actions.Count(a => a.Action == "trash");
+                var totalSize = _db.Emails.Sum(e => e.SizeEstimate);
+                _cachedStats = new AppSnapshot(totalEmails, classified, approved, trashed, totalSize);
+                _statsDirty = false;
+            }
+            catch
+            {
+                _cachedStats = new AppSnapshot(0, 0, 0, 0, 0);
+            }
+        }
 
-            return $"{totalEmails:N0} emails  │  {classified:N0} classified  │  {approved:N0} approved  │  {trashed:N0} trashed  │  {FormatSize(totalSize)}";
-        }
-        catch
-        {
-            return "Loading stats...";
-        }
+        var s = _cachedStats;
+        return $"{s.TotalEmails:N0} emails  │  {s.Classified:N0} classified  │  {s.Approved:N0} approved  │  {s.Trashed:N0} trashed  │  {FormatSize(s.TotalSize)}";
     }
 
     private IRenderable BuildTabBar()

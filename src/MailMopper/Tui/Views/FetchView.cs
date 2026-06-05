@@ -14,6 +14,7 @@ public sealed class FetchView : IAppView
     private readonly GmailSession _session;
 
     public Action? RequestRender { get; set; }
+    public Action? RequestRenderImmediate { get; set; }
 
     private enum State { Idle, Running, Complete, Error }
     private State _state = State.Idle;
@@ -24,6 +25,8 @@ public sealed class FetchView : IAppView
     private string _status = "";
     private string _lastError = "";
     private int _lastFetchedCount;
+    private bool _syncDirty = true;
+    private (string lastSync, int totalEmails, int previouslySynced) _cachedSyncState = ("Loading...", 0, 0);
 
     public FetchView(GmailFetchService fetchService, AppDbContext db, AppSettings settings, GmailSession session)
     {
@@ -198,33 +201,43 @@ public sealed class FetchView : IAppView
                     count = await _fetchService.FetchIncrementalAsync(progress, token);
 
                 _lastFetchedCount = count;
+                _syncDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
+                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _state = State.Idle;
+                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _state = State.Error;
+                RequestRenderImmediate?.Invoke();
             }
         }, token);
     }
 
     private (string lastSync, int totalEmails, int previouslySynced) GetSyncState()
     {
+        if (!_syncDirty)
+            return _cachedSyncState;
+
         try
         {
             var sync = _db.SyncStates.FirstOrDefault(s => s.Key == "default");
             var total = _db.Emails.Count();
             var count = sync?.TotalMessagesFetched ?? 0;
             var lastSync = sync?.LastSyncAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never";
-            return (lastSync, total, count);
+            _cachedSyncState = (lastSync, total, count);
+            _syncDirty = false;
         }
         catch
         {
-            return ("Unknown", 0, 0);
+            _cachedSyncState = ("Unknown", 0, 0);
         }
+
+        return _cachedSyncState;
     }
 }

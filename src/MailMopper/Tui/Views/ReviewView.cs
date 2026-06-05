@@ -35,12 +35,15 @@ public sealed class ReviewView : IAppView
     private List<Classification> _senderEmails = [];
 
     private char? _pendingCatCmd;
+    private int _yearSelectIndex;
+    private string _yearInputDigits = "";
 
     private const int PageSize = 30;
     private const int SenderPageSize = 25;
     private const int AutoSaveThreshold = 20;
 
     public Action? RequestRender { get; set; }
+    public Action? RequestRenderImmediate { get; set; }
 
     public ReviewView(AppDbContext db)
     {
@@ -70,7 +73,7 @@ public sealed class ReviewView : IAppView
             SubView.Category when _pendingCatCmd == 'K' => "#: Keep sender  A: Keep All  Esc: Cancel",
             SubView.Category => "#: View  T: Trash  K: Keep  H: Toggle  N/P: Page  Y: Year  Esc/B: Back",
             SubView.Sender => "T: Trash All  K: Keep All  W: Whitelist  ←/→: Page  Esc/B: Back",
-            SubView.YearSelect => "#: Select  B: Cancel",
+            SubView.YearSelect => "↑↓: Move  Enter: Select  Esc/B: Cancel",
             _ => ""
         };
     }
@@ -339,7 +342,7 @@ public sealed class ReviewView : IAppView
 
         if (upper == 'Y')
         {
-            _subView = SubView.YearSelect;
+            EnterYearSelect();
             return;
         }
 
@@ -376,40 +379,97 @@ public sealed class ReviewView : IAppView
 
         for (int i = 0; i < choices.Count; i++)
         {
-            content.Add(new Markup($"  [bold]{i + 1}[/] — {choices[i]}"));
+            var prefix = i == _yearSelectIndex ? "[bold cyan]›[/] " : "  ";
+            var style = i == _yearSelectIndex ? "[bold cyan]" : "";
+            var end = i == _yearSelectIndex ? "[/]" : "";
+            content.Add(new Markup($"{prefix}{style}{i + 1}. {choices[i]}{end}"));
         }
 
-        content.Add(new Markup("\n  Press a number to select, [bold]B[/] to cancel"));
+        var digitHint = _yearInputDigits.Length > 0
+            ? $" [bold cyan]Enter: {_yearInputDigits}[/]"
+            : "  Type number then Enter, or use ↑↓ arrows";
+
+        content.Add(new Markup($"\n{digitHint}"));
+        content.Add(new Markup("  [dim]Enter[/] select  [dim]↑↓[/] move  [bold]Esc[/]/[bold]B[/] cancel"));
 
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
     private Task HandleYearSelectInput(ConsoleKeyInfo key, CancellationToken ct)
     {
+        if (key.Key == ConsoleKey.UpArrow)
+        {
+            _yearInputDigits = "";
+            if (_yearSelectIndex > 0)
+                _yearSelectIndex--;
+            return Task.CompletedTask;
+        }
+
+        if (key.Key == ConsoleKey.DownArrow)
+        {
+            _yearInputDigits = "";
+            var maxIndex = _availableYears.Count;
+            if (_yearSelectIndex < maxIndex)
+                _yearSelectIndex++;
+            return Task.CompletedTask;
+        }
+
+        if (key.Key == ConsoleKey.Enter)
+        {
+            if (_yearInputDigits.Length > 0
+                && int.TryParse(_yearInputDigits, out var parsed)
+                && parsed >= 1 && parsed <= _availableYears.Count + 1)
+            {
+                _yearSelectIndex = parsed - 1;
+            }
+            ApplyYearSelection();
+            return Task.CompletedTask;
+        }
+
         var upper = char.ToUpperInvariant(key.KeyChar);
 
         if (upper == 'B' || key.Key == ConsoleKey.Escape)
         {
+            _yearInputDigits = "";
             _subView = SubView.Dashboard;
             return Task.CompletedTask;
         }
 
-        if (upper == '1')
+        if (char.IsDigit(upper))
         {
-            _yearFilter = null;
-            RebuildGroups();
-            _subView = SubView.Dashboard;
+            _yearInputDigits += upper;
+            if (_yearInputDigits.Length >= 4)
+                _yearInputDigits = _yearInputDigits[^4..];
             return Task.CompletedTask;
-        }
-
-        if (int.TryParse(upper.ToString(), out var num) && num >= 2 && num - 2 < _availableYears.Count)
-        {
-            _yearFilter = _availableYears[num - 2];
-            RebuildGroups();
-            _subView = SubView.Dashboard;
         }
 
         return Task.CompletedTask;
+    }
+
+    private void EnterYearSelect()
+    {
+        _yearSelectIndex = _yearFilter.HasValue
+            ? _availableYears.IndexOf(_yearFilter.Value) + 1
+            : 0;
+        _yearInputDigits = "";
+        _subView = SubView.YearSelect;
+    }
+
+    private void ApplyYearSelection()
+    {
+        if (_yearSelectIndex == 0)
+        {
+            _yearFilter = null;
+        }
+        else
+        {
+            var yearIdx = _yearSelectIndex - 1;
+            if (yearIdx >= 0 && yearIdx < _availableYears.Count)
+                _yearFilter = _availableYears[yearIdx];
+        }
+        RebuildGroups();
+        _subView = SubView.Dashboard;
+        _yearInputDigits = "";
     }
 
     // ── Category View ──────────────────────────────────────────────
@@ -557,7 +617,7 @@ public sealed class ReviewView : IAppView
 
         if (upper == 'Y')
         {
-            _subView = SubView.YearSelect;
+            EnterYearSelect();
             return;
         }
 

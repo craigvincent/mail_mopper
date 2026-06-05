@@ -15,6 +15,7 @@ public sealed class ClassifyView : IAppView
     private readonly GmailSession _session;
 
     public Action? RequestRender { get; set; }
+    public Action? RequestRenderImmediate { get; set; }
 
     private enum State { Idle, Running, Complete, Error }
     private State _state = State.Idle;
@@ -23,6 +24,8 @@ public sealed class ClassifyView : IAppView
     private string _status = "";
     private string _lastError = "";
     private TrainingResult? _lastTrainResult;
+    private bool _classifyStatsDirty = true;
+    private (int classified, int unclassified, int ruleCount, List<(string category, int count, double pct)> categories) _cachedClassifyStats = (0, 0, 0, []);
 
     public ClassifyView(
         RuleClassifier ruleClassifier,
@@ -221,16 +224,20 @@ public sealed class ClassifyView : IAppView
                 var summary = await pipeline.RunAsync(skipMl, onStatus: msg => { _status = msg; RequestRender?.Invoke(); }, token);
 
                 _status = $"Classified {summary.RuleClassified + summary.MlClassified} emails ({summary.Unclassified} remaining)";
+                _classifyStatsDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
+                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _state = State.Idle;
+                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _state = State.Error;
+                RequestRenderImmediate?.Invoke();
             }
         }, token);
     }
@@ -252,22 +259,29 @@ public sealed class ClassifyView : IAppView
             {
                 _lastTrainResult = await _trainerService.TrainAsync(modelPath, onStatus: msg => { _status = msg; RequestRender?.Invoke(); }, token);
                 _status = $"Training complete: {_lastTrainResult.TrainingSamples} samples, Accuracy={_lastTrainResult.Accuracy:P1}";
+                _classifyStatsDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
+                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _state = State.Idle;
+                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _state = State.Error;
+                RequestRenderImmediate?.Invoke();
             }
         }, token);
     }
 
     private (int classified, int unclassified, int ruleCount, List<(string category, int count, double pct)> categories) GetClassificationStats()
     {
+        if (!_classifyStatsDirty)
+            return _cachedClassifyStats;
+
         try
         {
             var totalEmails = _db.Emails.Count();
@@ -290,11 +304,14 @@ public sealed class ClassifyView : IAppView
                 .Take(8)
                 .ToList();
 
-            return (classified, unclassified, ruleCount, categoryList);
+            _cachedClassifyStats = (classified, unclassified, ruleCount, categoryList);
+            _classifyStatsDirty = false;
+            return _cachedClassifyStats;
         }
         catch
         {
-            return (0, 0, 0, new List<(string, int, double)>());
+            _cachedClassifyStats = (0, 0, 0, []);
+            return _cachedClassifyStats;
         }
     }
 }
