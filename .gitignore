@@ -75,3 +75,4 @@ appsettings.Local.json
 *.db
 *.db-shm
 *.db-wal
+*.csproj.lscache
