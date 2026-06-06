@@ -160,29 +160,30 @@ public sealed class ExecuteView(
         _ => ""
     };
 
-    public Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
+    public async Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
     {
         if (_state == State.Running)
         {
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
-                _operationCts?.Cancel();
+                if (_operationCts != null)
+                    await _operationCts.CancelAsync();
                 _operationCts?.Dispose();
                 _operationCts = null;
                 _state = State.Idle;
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
-            return Task.FromResult(ViewCommand.None);
+            return ViewCommand.None;
         }
 
         if (_state is State.Complete or State.Error)
         {
             _state = State.Idle;
-            return Task.FromResult(ViewCommand.None);
+            return ViewCommand.None;
         }
 
         if (!_session.IsAuthenticated)
-            return Task.FromResult(ViewCommand.None);
+            return ViewCommand.None;
 
         var upper = char.ToUpperInvariant(key.KeyChar);
 
@@ -200,7 +201,7 @@ public sealed class ExecuteView(
                 {
                     _state = State.Preview;
                 }
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
             if (upper == 'E')
             {
@@ -214,7 +215,7 @@ public sealed class ExecuteView(
                 {
                     _state = State.Confirm;
                 }
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
         }
 
@@ -223,12 +224,12 @@ public sealed class ExecuteView(
             if (upper == 'E')
             {
                 _state = State.Confirm;
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
             if (upper == 'B')
             {
                 _state = State.Idle;
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
         }
 
@@ -237,16 +238,16 @@ public sealed class ExecuteView(
             if (upper == 'E')
             {
                 StartExecute(ct);
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
             if (upper == 'B')
             {
                 _state = State.Idle;
-                return Task.FromResult(ViewCommand.None);
+                return ViewCommand.None;
             }
         }
 
-        return Task.FromResult(ViewCommand.None);
+        return ViewCommand.None;
     }
 
     private void RefreshPendingCounts()

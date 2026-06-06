@@ -143,7 +143,7 @@ public sealed class ReviewView(ReviewService review) : IAppView
 
         parts.Add(BuildCategoryTable());
 
-        var totalRemaining = _review.Groups.Sum(g => g.Classifications.Count);
+        var totalRemaining = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count);
         var totalSize = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Sum((Classification c) => c.Email?.SizeEstimate ?? 0));
         var pending = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count((Classification c) => c.ReviewDecision == ReviewDecision.Pending));
         var trash = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count((Classification c) => c.ReviewDecision == ReviewDecision.ApproveTrash));
