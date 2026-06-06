@@ -10,7 +10,10 @@ public partial class ReviewApp
 
     internal const int PageSize = 30;
 
-    public ReviewApp(ReviewService review) => _review = review ?? throw new ArgumentNullException(nameof(review));
+    public ReviewApp(ReviewService review)
+    {
+        _review = review ?? throw new ArgumentNullException(nameof(review));
+    }
 
     public async Task RunAsync(CancellationToken ct)
     {

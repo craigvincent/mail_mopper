@@ -44,7 +44,7 @@ public sealed class HomeView : IAppView
             new Rule().LeftJustified(),
         };
 
-        var nextSteps = BuildNextSteps((EmailStats)stats);
+        var nextSteps = BuildNextSteps(stats);
         if (nextSteps.Count > 0)
         {
             content.Add(new Markup("\n[bold]Next Steps:[/]"));
