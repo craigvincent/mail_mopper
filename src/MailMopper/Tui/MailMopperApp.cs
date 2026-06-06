@@ -135,8 +135,8 @@ public sealed class MailMopperApp
 
                 if (_needsRender)
                 {
-                    RenderFrame();
                     _needsRender = false;
+                    RenderFrame();
                     _lastRenderTime = DateTime.UtcNow;
                 }
 
