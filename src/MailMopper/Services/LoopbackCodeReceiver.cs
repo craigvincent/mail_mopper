@@ -59,8 +59,9 @@ public sealed class LoopbackCodeReceiver(int port, Action<string>? onUrlGenerate
             return new AuthorizationCodeResponseUrl { Error = error };
         }
 
-        return !string.Equals(state, url.State, StringComparison.Ordinal)
-            ? new AuthorizationCodeResponseUrl { Error = "state_mismatch" }
-            : new AuthorizationCodeResponseUrl { Code = code };
+        if (!string.Equals(state, url.State, StringComparison.Ordinal))
+            return new AuthorizationCodeResponseUrl { Error = "state_mismatch" };
+
+        return new AuthorizationCodeResponseUrl { Code = code };
     }
 }

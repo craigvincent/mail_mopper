@@ -80,16 +80,19 @@ public partial class ReviewApp
             };
         }
 
-        return decided > 0 ? $"[yellow]{decided}/{count} reviewed[/]" : "[dim]Not started[/]";
+        if (decided > 0)
+            return $"[yellow]{decided}/{count} reviewed[/]";
+
+        return "[dim]Not started[/]";
     }
 
     private void RenderDashboardSummary()
     {
         var totalRemaining = _review.Groups.Sum(g => g.Classifications.Count);
-        var totalRemainingSize = _review.Groups.Sum(static g => g.Classifications.Sum(static c => c.Email?.SizeEstimate ?? 0));
-        var totalPendingEmails = _review.Groups.Sum(static g => g.Classifications.Count(static c => c.ReviewDecision == ReviewDecision.Pending));
-        var totalTrashEmails = _review.Groups.Sum(static g => g.Classifications.Count(static c => c.ReviewDecision == ReviewDecision.ApproveTrash));
-        var totalKeepEmails = _review.Groups.Sum(static g => g.Classifications.Count(static c => c.ReviewDecision == ReviewDecision.Keep));
+        var totalRemainingSize = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Sum(static (Classification c) => c.Email?.SizeEstimate ?? 0));
+        var totalPendingEmails = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Count(static (Classification c) => c.ReviewDecision == ReviewDecision.Pending));
+        var totalTrashEmails = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Count(static (Classification c) => c.ReviewDecision == ReviewDecision.ApproveTrash));
+        var totalKeepEmails = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Count(static (Classification c) => c.ReviewDecision == ReviewDecision.Keep));
 
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"  [bold]Total:[/] {totalRemaining:N0} emails ({ReviewService.FormatSize(totalRemainingSize)})");

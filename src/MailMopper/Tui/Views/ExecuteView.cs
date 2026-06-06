@@ -152,14 +152,13 @@ public sealed class ExecuteView(
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    public string GetFooterHints()
+    public string GetFooterHints() => _state switch
     {
-        if (_state == State.Idle)
-            return "D: Dry-run  E: Execute";
-        if (_state is State.Preview or State.Confirm)
-            return "E: Execute  B: Back";
-        return _state == State.Running ? "Esc: Cancel" : "";
-    }
+        State.Idle => "D: Dry-run  E: Execute",
+        State.Preview or State.Confirm => "E: Execute  B: Back",
+        State.Running => "Esc: Cancel",
+        _ => ""
+    };
 
     public Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
     {

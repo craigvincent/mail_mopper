@@ -110,7 +110,9 @@ public sealed class ReviewService(AppDbContext db)
             return ReviewDecision.ApproveTrash;
         if (g.All(c => c.ReviewDecision == ReviewDecision.Keep))
             return ReviewDecision.Keep;
-        return g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted : ReviewDecision.Pending;
+        if (g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted))
+            return ReviewDecision.Whitelisted;
+        return ReviewDecision.Pending;
     }
 
     public static List<ReviewSenderGroup> BuildSenderList(ReviewCategoryGroup group)
@@ -134,7 +136,9 @@ public sealed class ReviewService(AppDbContext db)
             return ReviewDecision.ApproveTrash;
         if (list.All(c => c.ReviewDecision == ReviewDecision.Keep))
             return ReviewDecision.Keep;
-        return list.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted : ReviewDecision.Pending;
+        if (list.All(c => c.ReviewDecision == ReviewDecision.Whitelisted))
+            return ReviewDecision.Whitelisted;
+        return ReviewDecision.Pending;
     }
 
     public static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)

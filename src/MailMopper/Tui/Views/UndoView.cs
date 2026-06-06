@@ -23,6 +23,7 @@ public sealed class UndoView(
     private int _total;
     private string _lastError = "";
     private int _lastUndoneCount;
+    private const string TrashAction = "trash";
     private List<SessionInfo> _sessions = [];
     private int _selectedSession = -1;
     private bool _sessionsDirty = true;
@@ -69,7 +70,7 @@ public sealed class UndoView(
                 .AddColumn("[bold]Date[/]");
 
             var trashSessions = _sessions
-                .Where(s => s.Action == "trash")
+                .Where(s => s.Action == TrashAction)
                 .ToList();
 
             for (var i = 0; i < trashSessions.Count; i++)
@@ -105,7 +106,7 @@ public sealed class UndoView(
     private IRenderable BuildConfirmContent()
     {
         var trashSessions = _sessions
-            .Where(s => s.Action == "trash")
+            .Where(s => s.Action == TrashAction)
             .ToList();
         var selected = _selectedSession >= 0 && _selectedSession < trashSessions.Count
             ? trashSessions[_selectedSession]
@@ -163,14 +164,13 @@ public sealed class UndoView(
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    public string GetFooterHints()
+    public string GetFooterHints() => _state switch
     {
-        if (_state == State.Idle)
-            return "#: Select  U: Undo";
-        if (_state == State.Confirm)
-            return "U: Confirm  B: Back";
-        return _state == State.Running ? "Esc: Cancel" : "";
-    }
+        State.Idle => "#: Select  U: Undo",
+        State.Confirm => "U: Confirm  B: Back",
+        State.Running => "Esc: Cancel",
+        _ => ""
+    };
 
     public async Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
     {
@@ -198,7 +198,7 @@ public sealed class UndoView(
             return ViewCommand.None;
 
         await RefreshSessionsAsync(ct);
-        var trashSessions = _sessions.Where(s => s.Action == "trash").ToList();
+        var trashSessions = _sessions.Where(s => s.Action == TrashAction).ToList();
 
         var upper = char.ToUpperInvariant(key.KeyChar);
 
@@ -269,7 +269,7 @@ public sealed class UndoView(
         _state = State.Running;
         _processed = 0;
         _total = _sessions
-            .Where(s => s.Action == "trash" && s.SessionId == sessionId)
+            .Where(s => s.Action == TrashAction && s.SessionId == sessionId)
             .Select(s => s.Count)
             .FirstOrDefault();
         _lastError = "";

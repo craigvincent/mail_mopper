@@ -14,8 +14,6 @@ public sealed class ReviewView(ReviewService review) : IAppView
     private SubView _subView = SubView.Dashboard;
 
     private List<Classification> _senderEmails = [];
-
-    private int _selectedCategory = -1;
     private int _categoryPage;
     private bool _hidingDecided = true;
     private int _lastSelectedSenderIdx = -1;
@@ -33,6 +31,7 @@ public sealed class ReviewView(ReviewService review) : IAppView
 
     private const int PageSize = 30;
     private const int SenderPageSize = 25;
+    private const string BoldCyan = "[bold cyan]";
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
@@ -145,7 +144,7 @@ public sealed class ReviewView(ReviewService review) : IAppView
         parts.Add(BuildCategoryTable());
 
         var totalRemaining = _review.Groups.Sum(g => g.Classifications.Count);
-        var totalSize = _review.Groups.Sum(g => g.Classifications.Sum(c => c.Email?.SizeEstimate ?? 0));
+        var totalSize = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Sum((Classification c) => c.Email?.SizeEstimate ?? 0));
         var pending = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Pending));
         var trash = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.ApproveTrash));
         var keep = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Keep));
@@ -178,17 +177,17 @@ public sealed class ReviewView(ReviewService review) : IAppView
         table.AddColumn("[bold]Year[/]");
         foreach (var yb in yearBreakdown)
         {
-            var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
+            var highlight = _review.YearFilter == yb.Year ? BoldCyan : "[dim]";
             table.AddColumn(new TableColumn($"{highlight}{yb.Year}[/]").RightAligned());
         }
         table.AddRow(EmailsHeader.Concat(yearBreakdown.Select(yb =>
         {
-            var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
+            var highlight = _review.YearFilter == yb.Year ? BoldCyan : "[dim]";
             return $"{highlight}{yb.Count:N0}[/]";
         })).ToArray());
         table.AddRow(SizeHeader.Concat(yearBreakdown.Select(yb =>
         {
-            var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
+            var highlight = _review.YearFilter == yb.Year ? BoldCyan : "[dim]";
             return $"{highlight}{FormatSize(yb.Size)}[/]";
         })).ToArray());
         return table;
@@ -228,9 +227,13 @@ public sealed class ReviewView(ReviewService review) : IAppView
                     _ => "[green]\u2713 Done[/]"
                 };
             }
+            else if (decided > 0)
+            {
+                progress = $"[yellow]{decided}/{count}[/]";
+            }
             else
             {
-                progress = decided > 0 ? $"[yellow]{decided}/{count}[/]" : "[dim]Not started[/]";
+                progress = "[dim]Not started[/]";
             }
 
             table.AddRow(
@@ -270,8 +273,8 @@ public sealed class ReviewView(ReviewService review) : IAppView
 
         if (int.TryParse(upper.ToString(), out var num) && num >= 1 && num <= _review.Groups.Count)
         {
-            _selectedCategory = num - 1;
-            _activeCategoryGroup = _review.Groups[_selectedCategory];
+            var categoryIdx = num - 1;
+            _activeCategoryGroup = _review.Groups[categoryIdx];
             _categoryPage = 0;
             _hidingDecided = true;
             _lastSelectedSenderIdx = -1;
@@ -295,7 +298,7 @@ public sealed class ReviewView(ReviewService review) : IAppView
         for (var i = 0; i < choices.Count; i++)
         {
             var prefix = i == _yearSelectIndex ? "[bold cyan]›[/] " : "  ";
-            var style = i == _yearSelectIndex ? "[bold cyan]" : "";
+            var style = i == _yearSelectIndex ? BoldCyan : "";
             var end = i == _yearSelectIndex ? "[/]" : "";
             content.Add(new Markup($"{prefix}{style}{i + 1}. {choices[i]}{end}"));
         }

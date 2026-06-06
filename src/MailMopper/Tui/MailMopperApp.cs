@@ -26,6 +26,7 @@ public sealed class MailMopperApp
     private DateTime _lastRenderTime = DateTime.MinValue;
     private string? _cachedUserEmail;
     private bool _userEmailFetched;
+    private const string DefaultUserLabel = "Gmail";
     private AppSnapshot _cachedStats = new(0, 0, 0, 0, 0);
     private bool _statsDirty = true;
     private int _lastWindowWidth;
@@ -220,7 +221,7 @@ public sealed class MailMopperApp
     {
         var authenticated = _session.IsAuthenticated;
         var emailLabel = authenticated ? "[bold green]●[/] Authenticated" : "[bold red]○[/] Not authenticated";
-        var userInfo = authenticated ? GetUserEmail() ?? "Gmail" : "Not connected";
+        var userInfo = authenticated ? GetUserEmail() ?? DefaultUserLabel : "Not connected";
 
         if (!string.IsNullOrEmpty(_authStatus))
             emailLabel = $"[yellow]⟳ {Markup.Escape(_authStatus)}[/]";
@@ -255,20 +256,20 @@ public sealed class MailMopperApp
     private string GetUserEmail()
     {
         if (_userEmailFetched)
-            return _cachedUserEmail ?? "Gmail";
+            return _cachedUserEmail ?? DefaultUserLabel;
 
         try
         {
             var profile = _session.Service?.Users.GetProfile("me").ExecuteAsync(CancellationToken.None).Result;
             _cachedUserEmail = profile?.EmailAddress;
             _userEmailFetched = true;
-            return _cachedUserEmail ?? "Gmail";
+            return _cachedUserEmail ?? DefaultUserLabel;
         }
         catch
         {
             _cachedUserEmail = null;
             _userEmailFetched = true;
-            return "Gmail";
+            return DefaultUserLabel;
         }
     }
 

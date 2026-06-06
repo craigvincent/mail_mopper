@@ -137,12 +137,12 @@ public sealed class ClassifyView(
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    public string GetFooterHints()
+    public string GetFooterHints() => _state switch
     {
-        if (_state == State.Idle)
-            return "C: Classify  R: Rules only  T: Train model";
-        return _state == State.Running ? "Esc: Cancel" : "";
-    }
+        State.Idle => "C: Classify  R: Rules only  T: Train model",
+        State.Running => "Esc: Cancel",
+        _ => ""
+    };
 
     public async Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
     {
