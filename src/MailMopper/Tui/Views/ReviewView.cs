@@ -216,25 +216,18 @@ public sealed class ReviewView(ReviewService review) : IAppView
                 .OrderByDescending(sg => sg.Count())
                 .FirstOrDefault()?.Key ?? "-";
             var decided = g.Classifications.Count(c => c.ReviewDecision != ReviewDecision.Pending);
-            string progress;
-            if (decided == count)
+            var progress = (decided == count, decided > 0) switch
             {
-                progress = g.Decision switch
+                (true, _) => g.Decision switch
                 {
                     ReviewDecision.ApproveTrash => "[red]\u2717 Trash[/]",
                     ReviewDecision.Keep => "[green]\u2713 Keep[/]",
                     ReviewDecision.Whitelisted => "[cyan]\u2713 Whitelisted[/]",
                     _ => "[green]\u2713 Done[/]"
-                };
-            }
-            else if (decided > 0)
-            {
-                progress = $"[yellow]{decided}/{count}[/]";
-            }
-            else
-            {
-                progress = "[dim]Not started[/]";
-            }
+                },
+                (false, true) => $"[yellow]{decided}/{count}[/]",
+                _ => "[dim]Not started[/]"
+            };
 
             table.AddRow(
                 $"[bold]{i + 1}[/]",

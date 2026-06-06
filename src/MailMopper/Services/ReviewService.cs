@@ -106,9 +106,8 @@ public sealed class ReviewService(AppDbContext db)
 
     public static ReviewDecision ComputeGroupDecision(IGrouping<ClassificationCategory, Classification> g)
     {
-        var decisions = g.Select(x => x.ReviewDecision).Distinct().ToList();
-
-        return decisions?.SingleOrDefault() ?? ReviewDecision.Pending;
+        var distinct = g.Select(x => x.ReviewDecision).Distinct().Take(2).ToList();
+        return distinct.Count == 1 ? distinct[0] : ReviewDecision.Pending;
     }
 
     public static List<ReviewSenderGroup> BuildSenderList(ReviewCategoryGroup group)
@@ -127,10 +126,8 @@ public sealed class ReviewService(AppDbContext db)
 
     private static ReviewDecision ComputeSenderDecision(IEnumerable<Classification> classifications)
     {
-        var list = classifications as IList<Classification> ?? [.. classifications];
-        var decisions = list.Select(x => x.ReviewDecision).Distinct().ToList();
-
-        return decisions?.SingleOrDefault() ?? ReviewDecision.Pending;
+        var distinct = classifications.Select(x => x.ReviewDecision).Distinct().Take(2).ToList();
+        return distinct.Count == 1 ? distinct[0] : ReviewDecision.Pending;
     }
 
     public static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)
