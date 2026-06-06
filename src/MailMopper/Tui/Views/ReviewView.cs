@@ -6,9 +6,9 @@ using Spectre.Console.Rendering;
 
 namespace MailMopper.Tui.Views;
 
-public sealed class ReviewView : IAppView
+public sealed class ReviewView(ReviewService review) : IAppView
 {
-    private readonly ReviewService _review;
+    private readonly ReviewService _review = review ?? throw new ArgumentNullException(nameof(review));
 
     private enum SubView { Dashboard, Category, Sender, YearSelect }
     private SubView _subView = SubView.Dashboard;
@@ -37,11 +37,6 @@ public sealed class ReviewView : IAppView
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
 
-    public ReviewView(ReviewService review)
-    {
-        _review = review ?? throw new ArgumentNullException(nameof(review));
-    }
-
     public IRenderable GetContent(int availableHeight)
     {
         if (_review.Groups.Count == 0)
@@ -52,10 +47,9 @@ public sealed class ReviewView : IAppView
                 _ = LoadDataSafeAsync();
             }
 
-            if (_loadError != null)
-                return Align.Center(new Markup($"[red]Failed to load: {Markup.Escape(_loadError)}[/]"), VerticalAlignment.Middle);
-
-            return Align.Center(new Markup("[dim]Loading review data...[/]"), VerticalAlignment.Middle);
+            return _loadError != null
+                ? Align.Center(new Markup($"[red]Failed to load: {Markup.Escape(_loadError)}[/]"), VerticalAlignment.Middle)
+                : Align.Center(new Markup("[dim]Loading review data...[/]"), VerticalAlignment.Middle);
         }
 
         return _subView switch
@@ -212,7 +206,7 @@ public sealed class ReviewView : IAppView
             .AddColumn("[bold]Top Domain[/]")
             .AddColumn("[bold]Progress[/]");
 
-        for (int i = 0; i < _review.Groups.Count; i++)
+        for (var i = 0; i < _review.Groups.Count; i++)
         {
             var g = _review.Groups[i];
             var count = g.Classifications.Count;
@@ -234,13 +228,9 @@ public sealed class ReviewView : IAppView
                     _ => "[green]\u2713 Done[/]"
                 };
             }
-            else if (decided > 0)
-            {
-                progress = $"[yellow]{decided}/{count}[/]";
-            }
             else
             {
-                progress = "[dim]Not started[/]";
+                progress = decided > 0 ? $"[yellow]{decided}/{count}[/]" : "[dim]Not started[/]";
             }
 
             table.AddRow(
@@ -302,7 +292,7 @@ public sealed class ReviewView : IAppView
         var choices = new List<string> { "All years" };
         choices.AddRange(_review.AvailableYears.Select(y => y.ToString(CultureInfo.InvariantCulture)));
 
-        for (int i = 0; i < choices.Count; i++)
+        for (var i = 0; i < choices.Count; i++)
         {
             var prefix = i == _yearSelectIndex ? "[bold cyan]›[/] " : "  ";
             var style = i == _yearSelectIndex ? "[bold cyan]" : "";
@@ -418,7 +408,7 @@ public sealed class ReviewView : IAppView
         BuildCategorySenderList();
 
         var filtered = _hidingDecided
-            ? _categorySenders.Where(s => s.Decision == ReviewDecision.Pending).ToList()
+            ? [.. _categorySenders.Where(s => s.Decision == ReviewDecision.Pending)]
             : _categorySenders;
 
         var totalPages = Math.Max(1, (int)Math.Ceiling((double)filtered.Count / PageSize));
@@ -455,7 +445,7 @@ public sealed class ReviewView : IAppView
                 .AddColumn("[bold]Domain[/]")
                 .AddColumn("[bold]Status[/]");
 
-            for (int i = 0; i < pageSenders.Count; i++)
+            for (var i = 0; i < pageSenders.Count; i++)
             {
                 var s = pageSenders[i];
                 var from = s.From.Length > 40 ? s.From[..37] + "..." : s.From;
@@ -531,7 +521,7 @@ public sealed class ReviewView : IAppView
             return;
         }
 
-        if (upper == 'T' || upper == 'K')
+        if (upper is 'T' or 'K')
         {
             _pendingCatCmd = upper;
             return;
@@ -546,7 +536,7 @@ public sealed class ReviewView : IAppView
             var sender = filtered[_lastSelectedSenderIdx];
             _activeSender = sender;
             _senderPage = 0;
-            _senderEmails = sender.Classifications.OrderByDescending(c => c.Email?.Date).ToList();
+            _senderEmails = [.. sender.Classifications.OrderByDescending(c => c.Email?.Date)];
             _subView = SubView.Sender;
         }
     }
@@ -556,7 +546,7 @@ public sealed class ReviewView : IAppView
         var cmd = _pendingCatCmd!.Value;
         _pendingCatCmd = null;
 
-        if (upper == 'B' || upper == (char)27)
+        if (upper is 'B' or ((char)27))
             return;
 
         BuildCategorySenderList();
@@ -584,7 +574,7 @@ public sealed class ReviewView : IAppView
     private List<ReviewSenderGroup> GetFilteredSenders()
     {
         return _hidingDecided
-            ? _categorySenders.Where(s => s.Decision == ReviewDecision.Pending).ToList()
+            ? [.. _categorySenders.Where(s => s.Decision == ReviewDecision.Pending)]
             : _categorySenders;
     }
 

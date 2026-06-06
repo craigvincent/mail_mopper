@@ -68,9 +68,6 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.MessageId);
         });
 
-        modelBuilder.Entity<WhitelistEntry>(entity =>
-        {
-            entity.HasIndex(e => e.Pattern).IsUnique();
-        });
+        modelBuilder.Entity<WhitelistEntry>(entity => entity.HasIndex(e => e.Pattern).IsUnique());
     }
 }

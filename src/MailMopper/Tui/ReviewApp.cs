@@ -4,16 +4,11 @@ using Spectre.Console;
 
 namespace MailMopper.Tui;
 
-public partial class ReviewApp
+public partial class ReviewApp(ReviewService review)
 {
-    private readonly ReviewService _review;
+    private readonly ReviewService _review = review ?? throw new ArgumentNullException(nameof(review));
 
     internal const int PageSize = 30;
-
-    public ReviewApp(ReviewService review)
-    {
-        _review = review ?? throw new ArgumentNullException(nameof(review));
-    }
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -64,7 +59,7 @@ public partial class ReviewApp
             return "B";
         }
 
-        char c = char.ToUpper(firstKey.KeyChar, CultureInfo.InvariantCulture);
+        var c = char.ToUpper(firstKey.KeyChar, CultureInfo.InvariantCulture);
 
         if (instantKeys.Contains(c))
         {

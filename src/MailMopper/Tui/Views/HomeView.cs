@@ -5,19 +5,13 @@ using Spectre.Console.Rendering;
 
 namespace MailMopper.Tui.Views;
 
-public sealed class HomeView : IAppView
+public sealed class HomeView(AppDbContext db, GmailSession session) : IAppView
 {
-    private readonly AppDbContext _db;
-    private readonly GmailSession _session;
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
-
-    public HomeView(AppDbContext db, GmailSession session)
-    {
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-    }
 
     public IRenderable GetContent(int availableHeight)
     {

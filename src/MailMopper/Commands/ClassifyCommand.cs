@@ -16,20 +16,12 @@ public class ClassifySettings : CommandSettings
     public bool SkipMl { get; set; }
 }
 
-public class ClassifyCommand : AsyncCommand<ClassifySettings>
+public class ClassifyCommand(RuleClassifier ruleClassifier, AppDbContext dbContext, AppSettings appSettings, AppCancellation cancellation) : AsyncCommand<ClassifySettings>
 {
-    private readonly RuleClassifier _ruleClassifier;
-    private readonly AppDbContext _dbContext;
-    private readonly AppSettings _appSettings;
-    private readonly AppCancellation _cancellation;
-
-    public ClassifyCommand(RuleClassifier ruleClassifier, AppDbContext dbContext, AppSettings appSettings, AppCancellation cancellation)
-    {
-        _ruleClassifier = ruleClassifier ?? throw new ArgumentNullException(nameof(ruleClassifier));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly RuleClassifier _ruleClassifier = ruleClassifier ?? throw new ArgumentNullException(nameof(ruleClassifier));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppSettings _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context, ClassifySettings settings)
     {

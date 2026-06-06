@@ -40,7 +40,7 @@ public partial class ReviewApp
     {
         var allSenders = ReviewService.BuildSenderList(state.Group);
         var filteredSenders = state.HidingDecided
-            ? allSenders.Where(s => s.Decision == ReviewDecision.Pending).ToList()
+            ? [.. allSenders.Where(s => s.Decision == ReviewDecision.Pending)]
             : allSenders;
 
         var totalFiltered = filteredSenders.Count;

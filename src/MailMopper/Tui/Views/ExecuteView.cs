@@ -5,11 +5,14 @@ using Spectre.Console.Rendering;
 
 namespace MailMopper.Tui.Views;
 
-public sealed class ExecuteView : IAppView
+public sealed class ExecuteView(
+    ActionService actionService,
+    AppDbContext db,
+    GmailSession session) : IAppView
 {
-    private readonly ActionService _actionService;
-    private readonly AppDbContext _db;
-    private readonly GmailSession _session;
+    private readonly ActionService _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
@@ -24,16 +27,6 @@ public sealed class ExecuteView : IAppView
     private int _pendingCount;
     private long _pendingSize;
     private bool _pendingDirty = true;
-
-    public ExecuteView(
-        ActionService actionService,
-        AppDbContext db,
-        GmailSession session)
-    {
-        _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-    }
 
     public IRenderable GetContent(int availableHeight)
     {
@@ -163,11 +156,9 @@ public sealed class ExecuteView : IAppView
     {
         if (_state == State.Idle)
             return "D: Dry-run  E: Execute";
-        if (_state == State.Preview || _state == State.Confirm)
+        if (_state is State.Preview or State.Confirm)
             return "E: Execute  B: Back";
-        if (_state == State.Running)
-            return "Esc: Cancel";
-        return "";
+        return _state == State.Running ? "Esc: Cancel" : "";
     }
 
     public Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
@@ -185,7 +176,7 @@ public sealed class ExecuteView : IAppView
             return Task.FromResult(ViewCommand.None);
         }
 
-        if (_state == State.Complete || _state == State.Error)
+        if (_state is State.Complete or State.Error)
         {
             _state = State.Idle;
             return Task.FromResult(ViewCommand.None);

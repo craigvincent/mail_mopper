@@ -403,9 +403,7 @@ public class EndToEndTests : IDisposable
             .Returns(callInfo =>
             {
                 callCount++;
-                if (callCount == 2)
-                    throw new InvalidOperationException("API rate limit exceeded");
-                return Task.CompletedTask;
+                return callCount == 2 ? throw new InvalidOperationException("API rate limit exceeded") : Task.CompletedTask;
             });
 
         var actionService = new ActionService(gmailApi, _db, smallBatchSettings);

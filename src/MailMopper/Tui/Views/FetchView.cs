@@ -5,11 +5,11 @@ using Spectre.Console.Rendering;
 
 namespace MailMopper.Tui.Views;
 
-public sealed class FetchView : IAppView
+public sealed class FetchView(GmailFetchService fetchService, AppDbContext db, GmailSession session) : IAppView
 {
-    private readonly GmailFetchService _fetchService;
-    private readonly AppDbContext _db;
-    private readonly GmailSession _session;
+    private readonly GmailFetchService _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
@@ -24,13 +24,6 @@ public sealed class FetchView : IAppView
     private int _lastFetchedCount;
     private bool _syncDirty = true;
     private (string lastSync, int totalEmails, int previouslySynced) _cachedSyncState = ("Loading...", 0, 0);
-
-    public FetchView(GmailFetchService fetchService, AppDbContext db, GmailSession session)
-    {
-        _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-    }
 
     public IRenderable GetContent(int availableHeight)
     {
@@ -67,10 +60,10 @@ public sealed class FetchView : IAppView
             return Align.Center(new Rows(content), VerticalAlignment.Middle);
         }
 
-        var syncState = GetSyncState();
-        content.Add(new Markup($"\n  Last sync: [cyan]{syncState.lastSync}[/]"));
-        content.Add(new Markup($"  Total emails in database: [cyan]{syncState.totalEmails:N0}[/]"));
-        content.Add(new Markup($"  Previous synced count: [cyan]{syncState.previouslySynced:N0}[/]"));
+        var (lastSync, totalEmails, previouslySynced) = GetSyncState();
+        content.Add(new Markup($"\n  Last sync: [cyan]{lastSync}[/]"));
+        content.Add(new Markup($"  Total emails in database: [cyan]{totalEmails:N0}[/]"));
+        content.Add(new Markup($"  Previous synced count: [cyan]{previouslySynced:N0}[/]"));
 
         if (_lastFetchedCount > 0)
             content.Add(new Markup($"\n  [green]Last fetch: {_lastFetchedCount:N0} new emails[/]"));
@@ -123,9 +116,7 @@ public sealed class FetchView : IAppView
     {
         if (_state == State.Idle)
             return "F: Full  I: Incremental";
-        if (_state == State.Running)
-            return "Esc: Cancel";
-        return "";
+        return _state == State.Running ? "Esc: Cancel" : "";
     }
 
     public async Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
@@ -134,7 +125,8 @@ public sealed class FetchView : IAppView
         {
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
-                _operationCts?.Cancel();
+                if (_operationCts != null)
+                    await _operationCts.CancelAsync();
                 _operationCts?.Dispose();
                 _operationCts = null;
                 _state = State.Idle;
@@ -143,7 +135,7 @@ public sealed class FetchView : IAppView
             return ViewCommand.None;
         }
 
-        if (_state == State.Complete || _state == State.Error)
+        if (_state is State.Complete or State.Error)
         {
             _state = State.Idle;
             return ViewCommand.None;
@@ -151,9 +143,7 @@ public sealed class FetchView : IAppView
 
         if (!_session.IsAuthenticated)
         {
-            if (char.ToUpperInvariant(key.KeyChar) == 'A')
-                return ViewCommand.RequestAuth;
-            return ViewCommand.None;
+            return char.ToUpperInvariant(key.KeyChar) == 'A' ? ViewCommand.RequestAuth : ViewCommand.None;
         }
 
         var upper = char.ToUpperInvariant(key.KeyChar);
@@ -192,11 +182,7 @@ public sealed class FetchView : IAppView
         {
             try
             {
-                int count;
-                if (full)
-                    count = await _fetchService.FetchAllAsync(progress, token);
-                else
-                    count = await _fetchService.FetchIncrementalAsync(progress, token);
+                var count = full ? await _fetchService.FetchAllAsync(progress, token) : await _fetchService.FetchIncrementalAsync(progress, token);
 
                 _lastFetchedCount = count;
                 _syncDirty = true;

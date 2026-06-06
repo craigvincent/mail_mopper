@@ -6,13 +6,18 @@ using Spectre.Console.Rendering;
 
 namespace MailMopper.Tui.Views;
 
-public sealed class ClassifyView : IAppView
+public sealed class ClassifyView(
+    RuleClassifier ruleClassifier,
+    AppDbContext db,
+    AppSettings settings,
+    ModelTrainerService trainerService,
+    GmailSession session) : IAppView
 {
-    private readonly RuleClassifier _ruleClassifier;
-    private readonly AppDbContext _db;
-    private readonly AppSettings _settings;
-    private readonly ModelTrainerService _trainerService;
-    private readonly GmailSession _session;
+    private readonly RuleClassifier _ruleClassifier = ruleClassifier ?? throw new ArgumentNullException(nameof(ruleClassifier));
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
+    private readonly AppSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    private readonly ModelTrainerService _trainerService = trainerService ?? throw new ArgumentNullException(nameof(trainerService));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
@@ -25,20 +30,6 @@ public sealed class ClassifyView : IAppView
     private TrainingResult? _lastTrainResult;
     private bool _classifyStatsDirty = true;
     private (int classified, int unclassified, int ruleCount, List<(string category, int count, double pct)> categories) _cachedClassifyStats = (0, 0, 0, []);
-
-    public ClassifyView(
-        RuleClassifier ruleClassifier,
-        AppDbContext db,
-        AppSettings settings,
-        ModelTrainerService trainerService,
-        GmailSession session)
-    {
-        _ruleClassifier = ruleClassifier ?? throw new ArgumentNullException(nameof(ruleClassifier));
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _trainerService = trainerService ?? throw new ArgumentNullException(nameof(trainerService));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-    }
 
     public IRenderable GetContent(int availableHeight)
     {
@@ -66,19 +57,19 @@ public sealed class ClassifyView : IAppView
             return Align.Center(new Rows(content), VerticalAlignment.Middle);
         }
 
-        var stats = GetClassificationStats();
-        content.Add(new Markup($"\n  Total classified: [cyan]{stats.classified:N0}[/]"));
-        content.Add(new Markup($"  Unclassified (need classification): [yellow]{stats.unclassified:N0}[/]"));
-        content.Add(new Markup($"  Rules loaded: [cyan]{stats.ruleCount}[/]"));
+        var (classified, unclassified, ruleCount, categories) = GetClassificationStats();
+        content.Add(new Markup($"\n  Total classified: [cyan]{classified:N0}[/]"));
+        content.Add(new Markup($"  Unclassified (need classification): [yellow]{unclassified:N0}[/]"));
+        content.Add(new Markup($"  Rules loaded: [cyan]{ruleCount}[/]"));
 
-        if (stats.unclassified > 0)
-            content.Add(new Markup($"\n  [yellow]{stats.unclassified:N0} emails waiting for classification[/]"));
+        if (unclassified > 0)
+            content.Add(new Markup($"\n  [yellow]{unclassified:N0} emails waiting for classification[/]"));
 
-        if (stats.classified > 0)
+        if (classified > 0)
         {
             content.Add(new Markup("\n[bold]Category Breakdown:[/]"));
-            foreach (var cat in stats.categories)
-                content.Add(new Markup($"  {cat.category}: [cyan]{cat.count:N0}[/] ({cat.pct:F1}%)"));
+            foreach (var (category, count, pct) in categories)
+                content.Add(new Markup($"  {category}: [cyan]{count:N0}[/] ({pct:F1}%)"));
         }
 
         var modelPath = _settings.Ml?.ModelPath ?? ModelTrainerService.GetDefaultModelPath();
@@ -150,9 +141,7 @@ public sealed class ClassifyView : IAppView
     {
         if (_state == State.Idle)
             return "C: Classify  R: Rules only  T: Train model";
-        if (_state == State.Running)
-            return "Esc: Cancel";
-        return "";
+        return _state == State.Running ? "Esc: Cancel" : "";
     }
 
     public async Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
@@ -161,7 +150,8 @@ public sealed class ClassifyView : IAppView
         {
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
-                _operationCts?.Cancel();
+                if (_operationCts != null)
+                    await _operationCts.CancelAsync();
                 _operationCts?.Dispose();
                 _operationCts = null;
                 _state = State.Idle;
@@ -170,7 +160,7 @@ public sealed class ClassifyView : IAppView
             return ViewCommand.None;
         }
 
-        if (_state == State.Complete || _state == State.Error)
+        if (_state is State.Complete or State.Error)
         {
             _state = State.Idle;
             return ViewCommand.None;

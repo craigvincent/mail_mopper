@@ -3,16 +3,10 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class AppCommand : AsyncCommand
+public class AppCommand(Tui.MailMopperApp app, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly Tui.MailMopperApp _app;
-    private readonly AppCancellation _cancellation;
-
-    public AppCommand(Tui.MailMopperApp app, AppCancellation cancellation)
-    {
-        _app = app ?? throw new ArgumentNullException(nameof(app));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly Tui.MailMopperApp _app = app ?? throw new ArgumentNullException(nameof(app));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {

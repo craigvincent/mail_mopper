@@ -10,16 +10,10 @@ namespace MailMopper.Services;
 /// to the console instead of opening a browser. Works in headless and
 /// containerised environments when the port is forwarded to the host.
 /// </summary>
-public sealed class LoopbackCodeReceiver : ICodeReceiver
+public sealed class LoopbackCodeReceiver(int port, Action<string>? onUrlGenerated = null) : ICodeReceiver
 {
-    private readonly int _port;
-    private readonly Action<string>? _onUrlGenerated;
-
-    public LoopbackCodeReceiver(int port, Action<string>? onUrlGenerated = null)
-    {
-        _port = port;
-        _onUrlGenerated = onUrlGenerated;
-    }
+    private readonly int _port = port;
+    private readonly Action<string>? _onUrlGenerated = onUrlGenerated;
 
     public string RedirectUri => $"http://localhost:{_port}/authorize/";
 
@@ -65,11 +59,8 @@ public sealed class LoopbackCodeReceiver : ICodeReceiver
             return new AuthorizationCodeResponseUrl { Error = error };
         }
 
-        if (!string.Equals(state, url.State, StringComparison.Ordinal))
-        {
-            return new AuthorizationCodeResponseUrl { Error = "state_mismatch" };
-        }
-
-        return new AuthorizationCodeResponseUrl { Code = code };
+        return !string.Equals(state, url.State, StringComparison.Ordinal)
+            ? new AuthorizationCodeResponseUrl { Error = "state_mismatch" }
+            : new AuthorizationCodeResponseUrl { Code = code };
     }
 }

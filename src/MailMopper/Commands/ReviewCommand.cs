@@ -6,18 +6,11 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class ReviewCommand : AsyncCommand
+public class ReviewCommand(ReviewApp reviewApp, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly ReviewApp _reviewApp;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public ReviewCommand(ReviewApp reviewApp, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _reviewApp = reviewApp ?? throw new ArgumentNullException(nameof(reviewApp));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly ReviewApp _reviewApp = reviewApp ?? throw new ArgumentNullException(nameof(reviewApp));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {

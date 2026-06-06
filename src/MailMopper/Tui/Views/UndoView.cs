@@ -4,11 +4,14 @@ using Spectre.Console.Rendering;
 
 namespace MailMopper.Tui.Views;
 
-public sealed class UndoView : IAppView
+public sealed class UndoView(
+    DatabaseService dbService,
+    ActionService actionService,
+    GmailSession session) : IAppView
 {
-    private readonly DatabaseService _dbService;
-    private readonly ActionService _actionService;
-    private readonly GmailSession _session;
+    private readonly DatabaseService _dbService = dbService ?? throw new ArgumentNullException(nameof(dbService));
+    private readonly ActionService _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
@@ -23,16 +26,6 @@ public sealed class UndoView : IAppView
     private List<SessionInfo> _sessions = [];
     private int _selectedSession = -1;
     private bool _sessionsDirty = true;
-
-    public UndoView(
-        DatabaseService dbService,
-        ActionService actionService,
-        GmailSession session)
-    {
-        _dbService = dbService ?? throw new ArgumentNullException(nameof(dbService));
-        _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-    }
 
     public IRenderable GetContent(int availableHeight)
     {
@@ -79,7 +72,7 @@ public sealed class UndoView : IAppView
                 .Where(s => s.Action == "trash")
                 .ToList();
 
-            for (int i = 0; i < trashSessions.Count; i++)
+            for (var i = 0; i < trashSessions.Count; i++)
             {
                 var s = trashSessions[i];
                 var prefix = i == _selectedSession ? "[bold cyan]›[/] " : "  ";
@@ -176,9 +169,7 @@ public sealed class UndoView : IAppView
             return "#: Select  U: Undo";
         if (_state == State.Confirm)
             return "U: Confirm  B: Back";
-        if (_state == State.Running)
-            return "Esc: Cancel";
-        return "";
+        return _state == State.Running ? "Esc: Cancel" : "";
     }
 
     public async Task<ViewCommand> HandleInputAsync(ConsoleKeyInfo key, CancellationToken ct)
@@ -187,7 +178,8 @@ public sealed class UndoView : IAppView
         {
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
-                _operationCts?.Cancel();
+                if (_operationCts != null)
+                    await _operationCts.CancelAsync();
                 _operationCts?.Dispose();
                 _operationCts = null;
                 _state = State.Idle;
@@ -196,7 +188,7 @@ public sealed class UndoView : IAppView
             return ViewCommand.None;
         }
 
-        if (_state == State.Complete || _state == State.Error)
+        if (_state is State.Complete or State.Error)
         {
             _state = State.Idle;
             return ViewCommand.None;
@@ -261,7 +253,7 @@ public sealed class UndoView : IAppView
         try
         {
             var sessions = await _dbService.GetSessionsAsync(ct);
-            _sessions = sessions.ToList();
+            _sessions = [.. sessions];
             _sessionsDirty = false;
         }
         catch

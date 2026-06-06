@@ -18,20 +18,12 @@ public class ExecuteSettings : CommandSettings
     public bool Force { get; set; }
 }
 
-public class ExecuteCommand : AsyncCommand<ExecuteSettings>
+public class ExecuteCommand(GmailAuthService authService, ActionService actionService, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand<ExecuteSettings>
 {
-    private readonly GmailAuthService _authService;
-    private readonly ActionService _actionService;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public ExecuteCommand(GmailAuthService authService, ActionService actionService, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly GmailAuthService _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+    private readonly ActionService _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context, ExecuteSettings settings)
     {

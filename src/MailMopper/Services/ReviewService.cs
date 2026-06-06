@@ -19,15 +19,13 @@ public sealed class ReviewSenderGroup
     public ReviewDecision Decision { get; set; }
 }
 
-public sealed class ReviewService
+public sealed class ReviewService(AppDbContext db)
 {
-    private readonly AppDbContext _db;
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
 
     private List<Classification> _allReviewable = [];
     private List<ReviewCategoryGroup> _groups = [];
     private List<int> _availableYears = [];
-    private int? _yearFilter;
-
     private const int AutoSaveThreshold = 20;
 
     public IReadOnlyList<Classification> AllReviewable => _allReviewable;
@@ -37,18 +35,13 @@ public sealed class ReviewService
     public int IndexOfYear(int year) => _availableYears.IndexOf(year);
     public int? YearFilter
     {
-        get => _yearFilter;
-        set { _yearFilter = value; RebuildGroups(); }
+        get;
+        set { field = value; RebuildGroups(); }
     }
     public int PreviouslyTrashedCount { get; private set; }
     public long PreviouslyTrashedSize { get; private set; }
     public bool IsDirty { get; private set; }
     public int UnsavedActions { get; private set; }
-
-    public ReviewService(AppDbContext db)
-    {
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-    }
 
     public async Task LoadDataAsync(CancellationToken ct = default)
     {
@@ -67,7 +60,7 @@ public sealed class ReviewService
             .ToListAsync(ct);
         var trashedSet = new HashSet<string>(trashedIds);
 
-        bool retroFixed = false;
+        var retroFixed = false;
         foreach (var c in all)
         {
             if (c.ReviewDecision != ReviewDecision.Executed && trashedSet.Contains(c.MessageId))
@@ -83,36 +76,32 @@ public sealed class ReviewService
         PreviouslyTrashedCount = executed.Count;
         PreviouslyTrashedSize = executed.Sum(c => c.Email?.SizeEstimate ?? 0);
 
-        _allReviewable = all
-            .Where(c => c.ReviewDecision != ReviewDecision.Executed)
-            .ToList();
+        _allReviewable = [.. all.Where(c => c.ReviewDecision != ReviewDecision.Executed)];
 
-        _availableYears = _allReviewable
+        _availableYears = [.. _allReviewable
             .Where(c => c.Email?.Date != null)
             .Select(c => c.Email!.Date!.Value.Year)
             .Distinct()
-            .OrderBy(y => y)
-            .ToList();
+            .OrderBy(y => y)];
 
         RebuildGroups();
     }
 
     public void RebuildGroups()
     {
-        var filtered = _yearFilter.HasValue
-            ? _allReviewable.Where(c => c.Email?.Date?.Year == _yearFilter.Value).ToList()
+        var filtered = YearFilter.HasValue
+            ? [.. _allReviewable.Where(c => c.Email?.Date?.Year == YearFilter.Value)]
             : _allReviewable;
 
-        _groups = filtered
+        _groups = [.. filtered
             .GroupBy(c => c.Category)
             .OrderByDescending(g => g.Count())
             .Select(g => new ReviewCategoryGroup
             {
                 Category = g.Key,
-                Classifications = g.ToList(),
+                Classifications = [.. g],
                 Decision = ComputeGroupDecision(g)
-            })
-            .ToList();
+            })];
     }
 
     public static ReviewDecision ComputeGroupDecision(IGrouping<ClassificationCategory, Classification> g)
@@ -121,46 +110,41 @@ public sealed class ReviewService
             return ReviewDecision.ApproveTrash;
         if (g.All(c => c.ReviewDecision == ReviewDecision.Keep))
             return ReviewDecision.Keep;
-        if (g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted))
-            return ReviewDecision.Whitelisted;
-        return ReviewDecision.Pending;
+        return g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted : ReviewDecision.Pending;
     }
 
     public static List<ReviewSenderGroup> BuildSenderList(ReviewCategoryGroup group)
     {
-        return group.Classifications
+        return [.. group.Classifications
             .GroupBy(c => new { Domain = c.Email?.FromDomain ?? "unknown", Email = c.Email?.From ?? "unknown" })
             .OrderByDescending(g => g.Count())
             .Select(g => new ReviewSenderGroup
             {
                 From = g.Key.Email,
                 Domain = g.Key.Domain,
-                Classifications = g.ToList(),
+                Classifications = [.. g],
                 Decision = ComputeSenderDecision(g)
-            })
-            .ToList();
+            })];
     }
 
     private static ReviewDecision ComputeSenderDecision(IEnumerable<Classification> classifications)
     {
-        var list = classifications as IList<Classification> ?? classifications.ToList();
+        var list = classifications as IList<Classification> ?? [.. classifications];
         if (list.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash))
             return ReviewDecision.ApproveTrash;
         if (list.All(c => c.ReviewDecision == ReviewDecision.Keep))
             return ReviewDecision.Keep;
-        if (list.All(c => c.ReviewDecision == ReviewDecision.Whitelisted))
-            return ReviewDecision.Whitelisted;
-        return ReviewDecision.Pending;
+        return list.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted : ReviewDecision.Pending;
     }
 
     public static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)
     {
-        for (int i = current + 1; i < senders.Count; i++)
+        for (var i = current + 1; i < senders.Count; i++)
         {
             if (senders[i].Decision == ReviewDecision.Pending)
                 return i;
         }
-        for (int i = 0; i < current; i++)
+        for (var i = 0; i < current; i++)
         {
             if (senders[i].Decision == ReviewDecision.Pending)
                 return i;

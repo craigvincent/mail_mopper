@@ -15,22 +15,13 @@ public class UndoSettings : CommandSettings
     public string? SessionId { get; set; }
 }
 
-public class UndoCommand : AsyncCommand<UndoSettings>
+public class UndoCommand(DatabaseService databaseService, GmailAuthService authService, ActionService actionService, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand<UndoSettings>
 {
-    private readonly DatabaseService _databaseService;
-    private readonly GmailAuthService _authService;
-    private readonly ActionService _actionService;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public UndoCommand(DatabaseService databaseService, GmailAuthService authService, ActionService actionService, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly DatabaseService _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+    private readonly GmailAuthService _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+    private readonly ActionService _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context, UndoSettings settings)
     {
@@ -103,7 +94,7 @@ public class UndoCommand : AsyncCommand<UndoSettings>
             }
 
             // Undo with progress
-            int restored = 0;
+            var restored = 0;
 
             await AnsiConsole.Progress()
                 .StartAsync(async ctx =>

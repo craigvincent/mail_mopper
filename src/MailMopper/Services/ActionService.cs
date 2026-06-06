@@ -8,18 +8,11 @@ namespace MailMopper.Services;
 /// <summary>
 /// Service for executing trash/untrash actions on Gmail emails.
 /// </summary>
-public class ActionService
+public class ActionService(IGmailApi gmail, AppDbContext db, AppSettings settings)
 {
-    private readonly IGmailApi _gmail;
-    private readonly AppDbContext _db;
-    private readonly AppSettings _settings;
-
-    public ActionService(IGmailApi gmail, AppDbContext db, AppSettings settings)
-    {
-        _gmail = gmail ?? throw new ArgumentNullException(nameof(gmail));
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-    }
+    private readonly IGmailApi _gmail = gmail ?? throw new ArgumentNullException(nameof(gmail));
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
+    private readonly AppSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
     /// <summary>
     /// Executes trash action on emails classified as approved for trash.
@@ -43,7 +36,7 @@ public class ActionService
             .Select(c => new
             {
                 ClassificationId = c.Id,
-                MessageId = c.Email!.MessageId,
+                c.Email!.MessageId,
                 c.Reason,
                 c.Email.SizeEstimate
             })
@@ -79,7 +72,7 @@ public class ActionService
             try
             {
                 // Batch modify to add TRASH label
-                await _gmail.BatchModifyAsync(messageIds, addLabelIds: new List<string> { "TRASH" }, removeLabelIds: null, ct);
+                await _gmail.BatchModifyAsync(messageIds, addLabelIds: ["TRASH"], removeLabelIds: null, ct);
 
                 // Create action records for successfully trashed emails
                 var actionRecords = batch.Select(e => new ActionRecord
@@ -161,7 +154,7 @@ public class ActionService
             try
             {
                 // Batch modify to remove TRASH label
-                await _gmail.BatchModifyAsync(batchIds, addLabelIds: null, removeLabelIds: new List<string> { "TRASH" }, ct);
+                await _gmail.BatchModifyAsync(batchIds, addLabelIds: null, removeLabelIds: ["TRASH"], ct);
 
                 // Create untrash action records
                 var undoRecords = batchIds.Select(id => new ActionRecord

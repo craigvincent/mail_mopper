@@ -8,11 +8,9 @@ namespace MailMopper.Services;
 /// <summary>
 /// Trains an ML.NET text classifier on rule-classified emails.
 /// </summary>
-public class ModelTrainerService
+public class ModelTrainerService(AppDbContext db)
 {
-    private readonly AppDbContext _db;
-
-    public ModelTrainerService(AppDbContext db) => _db = db;
+    private readonly AppDbContext _db = db;
 
     /// <summary>
     /// Trains the email classifier and saves it to the specified path.
@@ -74,7 +72,7 @@ public class ModelTrainerService
             ? categories[i]
             : $"Class{i}").ToList();
 
-        for (int i = 0; i < confusionMatrix.PerClassPrecision.Count; i++)
+        for (var i = 0; i < confusionMatrix.PerClassPrecision.Count; i++)
         {
             var name = i < classNames.Count ? classNames[i] : $"Class{i}";
             perClassMetrics[name] = (

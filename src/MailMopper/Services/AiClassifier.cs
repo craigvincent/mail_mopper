@@ -59,7 +59,7 @@ public class MlClassifier : IDisposable
                 category = ClassificationCategory.Unclassified;
 
             // Confidence = max probability from the Score array
-            double confidence = prediction.Score is { Length: > 0 }
+            var confidence = prediction.Score is { Length: > 0 }
                 ? prediction.Score.Max()
                 : 0.0;
 
@@ -80,9 +80,9 @@ public class MlClassifier : IDisposable
     {
         var batchSize = _appSettings.Ml?.BatchSize ?? 500;
         var totalBatches = (int)Math.Ceiling((double)emails.Count / batchSize);
-        int processedCount = 0;
+        var processedCount = 0;
 
-        for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+        for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++)
         {
             ct.ThrowIfCancellationRequested();
 
