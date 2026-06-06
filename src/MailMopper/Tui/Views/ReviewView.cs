@@ -169,8 +169,8 @@ public sealed class ReviewView : IAppView
         return new Rows(parts);
     }
 
-    private static readonly string[] _emailsHeader = ["[bold]Emails[/]"];
-    private static readonly string[] _sizeHeader = ["[bold]Size[/]"];
+    private static readonly string[] EmailsHeader = ["[bold]Emails[/]"];
+    private static readonly string[] SizeHeader = ["[bold]Size[/]"];
 
     private IRenderable BuildYearBreakdown()
     {
@@ -191,12 +191,12 @@ public sealed class ReviewView : IAppView
             var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
             table.AddColumn(new TableColumn($"{highlight}{yb.Year}[/]").RightAligned());
         }
-        table.AddRow(_emailsHeader.Concat(yearBreakdown.Select(yb =>
+        table.AddRow(EmailsHeader.Concat(yearBreakdown.Select(yb =>
         {
             var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
             return $"{highlight}{yb.Count:N0}[/]";
         })).ToArray());
-        table.AddRow(_sizeHeader.Concat(yearBreakdown.Select(yb =>
+        table.AddRow(SizeHeader.Concat(yearBreakdown.Select(yb =>
         {
             var highlight = _review.YearFilter == yb.Year ? "[bold cyan]" : "[dim]";
             return $"{highlight}{FormatSize(yb.Size)}[/]";

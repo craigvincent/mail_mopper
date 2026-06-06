@@ -34,7 +34,7 @@ public sealed class MailMopperApp
 
     private sealed record AppSnapshot(int TotalEmails, int Classified, int Approved, int Trashed, long TotalSize);
 
-    private static readonly (AppTab Tab, string Label, string Hotkey)[] _tabs =
+    private static readonly (AppTab Tab, string Label, string Hotkey)[] Tabs =
     [
         (AppTab.Home, "Home", "1"),
         (AppTab.Fetch, "Fetch", "2"),
@@ -297,7 +297,7 @@ public sealed class MailMopperApp
     private IRenderable BuildTabBar()
     {
         var cols = new List<IRenderable>();
-        foreach (var (tab, label, hotkey) in _tabs)
+        foreach (var (tab, label, hotkey) in Tabs)
         {
             var isActive = tab == _currentTab;
             var style = isActive ? "[bold invert]" : "[dim]";
@@ -479,14 +479,14 @@ public sealed class MailMopperApp
     private AppTab NextTab()
     {
         var current = (int)_currentTab;
-        var count = _tabs.Length;
+        var count = Tabs.Length;
         return (AppTab)((current + 1) % count);
     }
 
     private AppTab PreviousTab()
     {
         var current = (int)_currentTab;
-        var count = _tabs.Length;
+        var count = Tabs.Length;
         return (AppTab)((current - 1 + count) % count);
     }
 
