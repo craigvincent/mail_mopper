@@ -106,11 +106,9 @@ public sealed class ReviewService(AppDbContext db)
 
     public static ReviewDecision ComputeGroupDecision(IGrouping<ClassificationCategory, Classification> g)
     {
-        if (g.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash))
-            return ReviewDecision.ApproveTrash;
-        if (g.All(c => c.ReviewDecision == ReviewDecision.Keep))
-            return ReviewDecision.Keep;
-        return g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted : ReviewDecision.Pending;
+        var decisions = g.Select(x => x.ReviewDecision).Distinct().ToList();
+
+        return decisions?.SingleOrDefault() ?? ReviewDecision.Pending;
     }
 
     public static List<ReviewSenderGroup> BuildSenderList(ReviewCategoryGroup group)
@@ -130,11 +128,9 @@ public sealed class ReviewService(AppDbContext db)
     private static ReviewDecision ComputeSenderDecision(IEnumerable<Classification> classifications)
     {
         var list = classifications as IList<Classification> ?? [.. classifications];
-        if (list.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash))
-            return ReviewDecision.ApproveTrash;
-        if (list.All(c => c.ReviewDecision == ReviewDecision.Keep))
-            return ReviewDecision.Keep;
-        return list.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted : ReviewDecision.Pending;
+        var decisions = list.Select(x => x.ReviewDecision).Distinct().ToList();
+
+        return decisions?.SingleOrDefault() ?? ReviewDecision.Pending;
     }
 
     public static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)

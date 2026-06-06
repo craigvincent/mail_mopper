@@ -175,10 +175,10 @@ public sealed class ReviewView(ReviewService review) : IAppView
 
         var table = new Table().Border(TableBorder.Minimal).Expand();
         table.AddColumn("[bold]Year[/]");
-        foreach (var yb in yearBreakdown)
+        foreach (var y in yearBreakdown.Select(yb => yb.Year))
         {
-            var highlight = _review.YearFilter == yb.Year ? BoldCyan : "[dim]";
-            table.AddColumn(new TableColumn($"{highlight}{yb.Year}[/]").RightAligned());
+            var highlight = _review.YearFilter == y ? BoldCyan : "[dim]";
+            table.AddColumn(new TableColumn($"{highlight}{y}[/]").RightAligned());
         }
         table.AddRow(EmailsHeader.Concat(yearBreakdown.Select(yb =>
         {
