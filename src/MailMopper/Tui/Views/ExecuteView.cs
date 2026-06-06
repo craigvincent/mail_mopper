@@ -1,4 +1,3 @@
-using MailMopper.Config;
 using MailMopper.Data;
 using MailMopper.Services;
 using Spectre.Console;
@@ -10,16 +9,13 @@ public sealed class ExecuteView : IAppView
 {
     private readonly ActionService _actionService;
     private readonly AppDbContext _db;
-    private readonly AppSettings _settings;
     private readonly GmailSession _session;
-    private readonly GmailAuthService _authService;
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
 
     private enum State { Idle, Preview, Confirm, Running, Complete, Error }
     private State _state = State.Idle;
-    private Task? _activeTask;
     private CancellationTokenSource? _operationCts;
     private int _processed;
     private int _total;
@@ -32,15 +28,11 @@ public sealed class ExecuteView : IAppView
     public ExecuteView(
         ActionService actionService,
         AppDbContext db,
-        AppSettings settings,
-        GmailSession session,
-        GmailAuthService authService)
+        GmailSession session)
     {
         _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
         _db = db ?? throw new ArgumentNullException(nameof(db));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _session = session ?? throw new ArgumentNullException(nameof(session));
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
     }
 
     public IRenderable GetContent(int availableHeight)
@@ -185,6 +177,8 @@ public sealed class ExecuteView : IAppView
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
                 _operationCts?.Cancel();
+                _operationCts?.Dispose();
+                _operationCts = null;
                 _state = State.Idle;
                 return Task.FromResult(ViewCommand.None);
             }
@@ -305,26 +299,29 @@ public sealed class ExecuteView : IAppView
             RequestRender?.Invoke();
         });
 
-        _activeTask = Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
                 _lastResult = await _actionService.TrashApprovedAsync(false, progress, token);
                 _pendingDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
-                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _pendingDirty = true;
                 _state = State.Idle;
-                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _pendingDirty = true;
                 _state = State.Error;
+            }
+            finally
+            {
+                _operationCts?.Dispose();
+                _operationCts = null;
                 RequestRenderImmediate?.Invoke();
             }
         }, token);

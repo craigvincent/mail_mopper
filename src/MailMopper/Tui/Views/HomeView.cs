@@ -8,16 +8,14 @@ namespace MailMopper.Tui.Views;
 public sealed class HomeView : IAppView
 {
     private readonly AppDbContext _db;
-    private readonly DatabaseService _dbService;
     private readonly GmailSession _session;
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
 
-    public HomeView(AppDbContext db, DatabaseService dbService, GmailSession session)
+    public HomeView(AppDbContext db, GmailSession session)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
-        _dbService = dbService ?? throw new ArgumentNullException(nameof(dbService));
         _session = session ?? throw new ArgumentNullException(nameof(session));
     }
 

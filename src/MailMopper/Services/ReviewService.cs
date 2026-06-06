@@ -140,12 +140,21 @@ public sealed class ReviewService
                 From = g.Key.Email,
                 Domain = g.Key.Domain,
                 Classifications = g.ToList(),
-                Decision = g.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash) ? ReviewDecision.ApproveTrash
-                         : g.All(c => c.ReviewDecision == ReviewDecision.Keep) ? ReviewDecision.Keep
-                         : g.All(c => c.ReviewDecision == ReviewDecision.Whitelisted) ? ReviewDecision.Whitelisted
-                         : ReviewDecision.Pending
+                Decision = ComputeSenderDecision(g)
             })
             .ToList();
+    }
+
+    private static ReviewDecision ComputeSenderDecision(IEnumerable<Classification> classifications)
+    {
+        var list = classifications as IList<Classification> ?? classifications.ToList();
+        if (list.All(c => c.ReviewDecision == ReviewDecision.ApproveTrash))
+            return ReviewDecision.ApproveTrash;
+        if (list.All(c => c.ReviewDecision == ReviewDecision.Keep))
+            return ReviewDecision.Keep;
+        if (list.All(c => c.ReviewDecision == ReviewDecision.Whitelisted))
+            return ReviewDecision.Whitelisted;
+        return ReviewDecision.Pending;
     }
 
     public static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)

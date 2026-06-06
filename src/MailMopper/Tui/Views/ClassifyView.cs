@@ -19,7 +19,6 @@ public sealed class ClassifyView : IAppView
 
     private enum State { Idle, Running, Complete, Error }
     private State _state = State.Idle;
-    private Task? _activeTask;
     private CancellationTokenSource? _operationCts;
     private string _status = "";
     private string _lastError = "";
@@ -163,6 +162,8 @@ public sealed class ClassifyView : IAppView
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
                 _operationCts?.Cancel();
+                _operationCts?.Dispose();
+                _operationCts = null;
                 _state = State.Idle;
                 return ViewCommand.None;
             }
@@ -207,7 +208,7 @@ public sealed class ClassifyView : IAppView
         _lastError = "";
         _lastTrainResult = null;
 
-        _activeTask = Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
@@ -226,17 +227,20 @@ public sealed class ClassifyView : IAppView
                 _status = $"Classified {summary.RuleClassified + summary.MlClassified} emails ({summary.Unclassified} remaining)";
                 _classifyStatsDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
-                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _state = State.Idle;
-                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _state = State.Error;
+            }
+            finally
+            {
+                _operationCts?.Dispose();
+                _operationCts = null;
                 RequestRenderImmediate?.Invoke();
             }
         }, token);
@@ -253,7 +257,7 @@ public sealed class ClassifyView : IAppView
 
         var modelPath = _settings.Ml?.ModelPath ?? ModelTrainerService.GetDefaultModelPath();
 
-        _activeTask = Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
@@ -261,17 +265,20 @@ public sealed class ClassifyView : IAppView
                 _status = $"Training complete: {_lastTrainResult.TrainingSamples} samples, Accuracy={_lastTrainResult.Accuracy:P1}";
                 _classifyStatsDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
-                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _state = State.Idle;
-                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _state = State.Error;
+            }
+            finally
+            {
+                _operationCts?.Dispose();
+                _operationCts = null;
                 RequestRenderImmediate?.Invoke();
             }
         }, token);

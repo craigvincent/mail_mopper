@@ -12,7 +12,6 @@ public enum AppTab { Home, Fetch, Classify, Review, Execute, Undo }
 public sealed class MailMopperApp
 {
     private readonly GmailSession _session;
-    private readonly AppCancellation _cancellation;
     private readonly AppDbContext _db;
     private readonly AppSettings _settings;
     private readonly IAppView[] _views;
@@ -46,7 +45,6 @@ public sealed class MailMopperApp
 
     public MailMopperApp(
         GmailSession session,
-        AppCancellation cancellation,
         AppDbContext db,
         AppSettings settings,
         HomeView homeView,
@@ -57,7 +55,6 @@ public sealed class MailMopperApp
         ReviewView reviewView)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _views = new IAppView[(int)AppTab.Undo + 1];
@@ -97,7 +94,10 @@ public sealed class MailMopperApp
                 return true;
             }
         }
-        catch (IOException) { }
+        catch (IOException)
+        {
+            // Console may be closed or redirected; ignore
+        }
         return false;
     }
 
@@ -175,6 +175,7 @@ public sealed class MailMopperApp
         }
         catch (IOException)
         {
+            // Console may be closed or redirected; ignore
         }
     }
 
@@ -188,6 +189,7 @@ public sealed class MailMopperApp
         }
         catch (IOException)
         {
+            // Console may be closed or redirected; ignore
         }
     }
 

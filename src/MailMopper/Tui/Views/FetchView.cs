@@ -1,4 +1,3 @@
-using MailMopper.Config;
 using MailMopper.Data;
 using MailMopper.Services;
 using Spectre.Console;
@@ -10,7 +9,6 @@ public sealed class FetchView : IAppView
 {
     private readonly GmailFetchService _fetchService;
     private readonly AppDbContext _db;
-    private readonly AppSettings _settings;
     private readonly GmailSession _session;
 
     public Action? RequestRender { get; set; }
@@ -18,7 +16,6 @@ public sealed class FetchView : IAppView
 
     private enum State { Idle, Running, Complete, Error }
     private State _state = State.Idle;
-    private Task? _activeTask;
     private CancellationTokenSource? _operationCts;
     private int _fetched;
     private int _total;
@@ -28,11 +25,10 @@ public sealed class FetchView : IAppView
     private bool _syncDirty = true;
     private (string lastSync, int totalEmails, int previouslySynced) _cachedSyncState = ("Loading...", 0, 0);
 
-    public FetchView(GmailFetchService fetchService, AppDbContext db, AppSettings settings, GmailSession session)
+    public FetchView(GmailFetchService fetchService, AppDbContext db, GmailSession session)
     {
         _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
         _db = db ?? throw new ArgumentNullException(nameof(db));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _session = session ?? throw new ArgumentNullException(nameof(session));
     }
 
@@ -139,6 +135,8 @@ public sealed class FetchView : IAppView
             if (key.Key == ConsoleKey.Escape || char.ToUpperInvariant(key.KeyChar) == 'Q')
             {
                 _operationCts?.Cancel();
+                _operationCts?.Dispose();
+                _operationCts = null;
                 _state = State.Idle;
                 return ViewCommand.None;
             }
@@ -190,7 +188,7 @@ public sealed class FetchView : IAppView
             RequestRender?.Invoke();
         });
 
-        _activeTask = Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
@@ -203,17 +201,20 @@ public sealed class FetchView : IAppView
                 _lastFetchedCount = count;
                 _syncDirty = true;
                 _state = token.IsCancellationRequested ? State.Idle : State.Complete;
-                RequestRenderImmediate?.Invoke();
             }
             catch (OperationCanceledException)
             {
                 _state = State.Idle;
-                RequestRenderImmediate?.Invoke();
             }
             catch (Exception ex)
             {
                 _lastError = ex.Message;
                 _state = State.Error;
+            }
+            finally
+            {
+                _operationCts?.Dispose();
+                _operationCts = null;
                 RequestRenderImmediate?.Invoke();
             }
         }, token);

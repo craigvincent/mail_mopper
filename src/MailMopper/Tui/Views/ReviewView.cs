@@ -1,5 +1,4 @@
 using System.Globalization;
-using MailMopper.Data;
 using MailMopper.Models;
 using MailMopper.Services;
 using Spectre.Console;
@@ -9,7 +8,6 @@ namespace MailMopper.Tui.Views;
 
 public sealed class ReviewView : IAppView
 {
-    private readonly AppDbContext _db;
     private readonly ReviewService _review;
 
     private enum SubView { Dashboard, Category, Sender, YearSelect }
@@ -35,14 +33,12 @@ public sealed class ReviewView : IAppView
 
     private const int PageSize = 30;
     private const int SenderPageSize = 25;
-    private const int AutoSaveThreshold = 20;
 
     public Action? RequestRender { get; set; }
     public Action? RequestRenderImmediate { get; set; }
 
-    public ReviewView(AppDbContext db, ReviewService review)
+    public ReviewView(ReviewService review)
     {
-        _db = db ?? throw new ArgumentNullException(nameof(db));
         _review = review ?? throw new ArgumentNullException(nameof(review));
     }
 

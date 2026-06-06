@@ -1,5 +1,4 @@
 using System.Globalization;
-using MailMopper.Models;
 using MailMopper.Services;
 using Spectre.Console;
 
@@ -9,7 +8,6 @@ public partial class ReviewApp
 {
     private readonly ReviewService _review;
 
-    private const int AutoSaveThreshold = 20;
     internal const int PageSize = 30;
 
     public ReviewApp(ReviewService review) => _review = review ?? throw new ArgumentNullException(nameof(review));
@@ -43,8 +41,6 @@ public partial class ReviewApp
     private void MarkDirty(int actionCount = 1) => _review.MarkDirty(actionCount);
 
     private static string FormatSize(long bytes) => ReviewService.FormatSize(bytes);
-
-    private static string FormatDecision(ReviewDecision d) => ReviewService.FormatDecision(d);
 
     // ── Input helpers ─────────────────────────────────────────────────
 
