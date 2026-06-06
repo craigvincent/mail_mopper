@@ -63,7 +63,7 @@ public sealed class HomeView : IAppView
     public string GetFooterHints()
     {
         return _session.IsAuthenticated
-            ? "A: F:Fetch C:Classify R:Review E:Execute U:Undo L:Logout"
+            ? "F:Fetch C:Classify R:Review E:Execute U:Undo L:Logout"
             : "[dim]A: Authenticate  F:Fetch C:Classify R:Review E:Execute U:Undo[/]";
     }
 

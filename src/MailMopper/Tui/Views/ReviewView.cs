@@ -30,6 +30,8 @@ public sealed class ReviewView : IAppView
     private char? _pendingCatCmd;
     private int _yearSelectIndex;
     private string _yearInputDigits = "";
+    private string? _loadError;
+    private bool _loadingStarted;
 
     private const int PageSize = 30;
     private const int SenderPageSize = 25;
@@ -46,7 +48,19 @@ public sealed class ReviewView : IAppView
 
     public IRenderable GetContent(int availableHeight)
     {
-        _ = _review.LoadDataAsync();
+        if (_review.Groups.Count == 0)
+        {
+            if (!_loadingStarted)
+            {
+                _loadingStarted = true;
+                _ = LoadDataSafeAsync();
+            }
+
+            if (_loadError != null)
+                return Align.Center(new Markup($"[red]Failed to load: {Markup.Escape(_loadError)}[/]"), VerticalAlignment.Middle);
+
+            return Align.Center(new Markup("[dim]Loading review data...[/]"), VerticalAlignment.Middle);
+        }
 
         return _subView switch
         {
@@ -56,6 +70,19 @@ public sealed class ReviewView : IAppView
             SubView.YearSelect => BuildYearSelect(),
             _ => new Markup("")
         };
+    }
+
+    private async Task LoadDataSafeAsync()
+    {
+        try
+        {
+            await _review.LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        RequestRenderImmediate?.Invoke();
     }
 
     public string GetFooterHints()
