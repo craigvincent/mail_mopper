@@ -145,9 +145,9 @@ public sealed class ReviewView(ReviewService review) : IAppView
 
         var totalRemaining = _review.Groups.Sum(g => g.Classifications.Count);
         var totalSize = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Sum((Classification c) => c.Email?.SizeEstimate ?? 0));
-        var pending = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Pending));
-        var trash = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.ApproveTrash));
-        var keep = _review.Groups.Sum(g => g.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Keep));
+        var pending = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count((Classification c) => c.ReviewDecision == ReviewDecision.Pending));
+        var trash = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count((Classification c) => c.ReviewDecision == ReviewDecision.ApproveTrash));
+        var keep = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count((Classification c) => c.ReviewDecision == ReviewDecision.Keep));
 
         parts.Add(new Markup($"  [bold]Total:[/] {totalRemaining:N0} emails ({FormatSize(totalSize)})  │  [yellow]Pending: {pending:N0}[/]  [red]Trash: {trash:N0}[/]  [green]Keep: {keep:N0}[/]"));
         if (_review.PreviouslyTrashedCount > 0)
