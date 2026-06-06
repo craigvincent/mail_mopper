@@ -39,11 +39,11 @@ public sealed class FetchView : IAppView
         switch (_state)
         {
             case State.Idle:
-                return BuildIdleContent(availableHeight);
+                return BuildIdleContent();
             case State.Running:
-                return BuildRunningContent(availableHeight);
+                return BuildRunningContent();
             case State.Complete:
-                return BuildCompleteContent(availableHeight);
+                return BuildCompleteContent();
             case State.Error:
                 content.Add(new Markup($"[red]Error: {Markup.Escape(_lastError)}[/]"));
                 content.Add(new Markup("\n[dim]Press any key to continue...[/]"));
@@ -53,7 +53,7 @@ public sealed class FetchView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildIdleContent(int availableHeight)
+    private IRenderable BuildIdleContent()
     {
         var content = new List<IRenderable>
         {
@@ -82,7 +82,7 @@ public sealed class FetchView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildRunningContent(int availableHeight)
+    private IRenderable BuildRunningContent()
     {
         var content = new List<IRenderable>
         {
@@ -101,7 +101,7 @@ public sealed class FetchView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildCompleteContent(int availableHeight)
+    private IRenderable BuildCompleteContent()
     {
         var content = new List<IRenderable>
         {

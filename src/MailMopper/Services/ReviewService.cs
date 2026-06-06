@@ -27,10 +27,6 @@ public sealed class ReviewService
     private List<ReviewCategoryGroup> _groups = [];
     private List<int> _availableYears = [];
     private int? _yearFilter;
-    private int _previouslyTrashedCount;
-    private long _previouslyTrashedSize;
-    private bool _dirty;
-    private int _unsavedActions;
 
     private const int AutoSaveThreshold = 20;
 
@@ -44,10 +40,10 @@ public sealed class ReviewService
         get => _yearFilter;
         set { _yearFilter = value; RebuildGroups(); }
     }
-    public int PreviouslyTrashedCount => _previouslyTrashedCount;
-    public long PreviouslyTrashedSize => _previouslyTrashedSize;
-    public bool IsDirty => _dirty;
-    public int UnsavedActions => _unsavedActions;
+    public int PreviouslyTrashedCount { get; private set; }
+    public long PreviouslyTrashedSize { get; private set; }
+    public bool IsDirty { get; private set; }
+    public int UnsavedActions { get; private set; }
 
     public ReviewService(AppDbContext db)
     {
@@ -84,8 +80,8 @@ public sealed class ReviewService
             await _db.SaveChangesAsync(ct);
 
         var executed = all.Where(c => c.ReviewDecision == ReviewDecision.Executed).ToList();
-        _previouslyTrashedCount = executed.Count;
-        _previouslyTrashedSize = executed.Sum(c => c.Email?.SizeEstimate ?? 0);
+        PreviouslyTrashedCount = executed.Count;
+        PreviouslyTrashedSize = executed.Sum(c => c.Email?.SizeEstimate ?? 0);
 
         _allReviewable = all
             .Where(c => c.ReviewDecision != ReviewDecision.Executed)
@@ -160,26 +156,30 @@ public sealed class ReviewService
     public static int FindNextPendingIndex(List<ReviewSenderGroup> senders, int current)
     {
         for (int i = current + 1; i < senders.Count; i++)
+        {
             if (senders[i].Decision == ReviewDecision.Pending)
                 return i;
+        }
         for (int i = 0; i < current; i++)
+        {
             if (senders[i].Decision == ReviewDecision.Pending)
                 return i;
+        }
         return -1;
     }
 
-    public void MarkDirty(int count = 1) { _dirty = true; _unsavedActions += count; }
+    public void MarkDirty(int count = 1) { IsDirty = true; UnsavedActions += count; }
 
     public async Task AutoSaveIfNeededAsync(CancellationToken ct)
     {
-        if (_unsavedActions >= AutoSaveThreshold)
+        if (UnsavedActions >= AutoSaveThreshold)
         {
             await _db.SaveChangesAsync(ct);
-            _unsavedActions = 0;
+            UnsavedActions = 0;
         }
     }
 
-    public async Task SaveAsync(CancellationToken ct) { await _db.SaveChangesAsync(ct); _unsavedActions = 0; }
+    public async Task SaveAsync(CancellationToken ct) { await _db.SaveChangesAsync(ct); UnsavedActions = 0; }
 
     public static void ApplySenderDecision(ReviewSenderGroup sender, ReviewDecision decision)
     {

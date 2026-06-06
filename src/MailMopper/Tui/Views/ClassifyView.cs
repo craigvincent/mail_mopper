@@ -44,15 +44,15 @@ public sealed class ClassifyView : IAppView
     {
         return _state switch
         {
-            State.Idle => BuildIdleContent(availableHeight),
-            State.Running => BuildRunningContent(availableHeight),
-            State.Complete => BuildCompleteContent(availableHeight),
-            State.Error => BuildErrorContent(availableHeight),
+            State.Idle => BuildIdleContent(),
+            State.Running => BuildRunningContent(),
+            State.Complete => BuildCompleteContent(),
+            State.Error => BuildErrorContent(),
             _ => new Markup("")
         };
     }
 
-    private IRenderable BuildIdleContent(int availableHeight)
+    private IRenderable BuildIdleContent()
     {
         var content = new List<IRenderable>
         {
@@ -98,7 +98,7 @@ public sealed class ClassifyView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildRunningContent(int availableHeight)
+    private IRenderable BuildRunningContent()
     {
         var content = new List<IRenderable>
         {
@@ -112,7 +112,7 @@ public sealed class ClassifyView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildCompleteContent(int availableHeight)
+    private IRenderable BuildCompleteContent()
     {
         var content = new List<IRenderable>
         {
@@ -136,7 +136,7 @@ public sealed class ClassifyView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildErrorContent(int availableHeight)
+    private IRenderable BuildErrorContent()
     {
         var content = new List<IRenderable>
         {

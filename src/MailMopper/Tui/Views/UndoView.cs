@@ -38,16 +38,16 @@ public sealed class UndoView : IAppView
     {
         return _state switch
         {
-            State.Idle => BuildIdleContent(availableHeight),
-            State.Confirm => BuildConfirmContent(availableHeight),
-            State.Running => BuildRunningContent(availableHeight),
-            State.Complete => BuildCompleteContent(availableHeight),
-            State.Error => BuildErrorContent(availableHeight),
+            State.Idle => BuildIdleContent(),
+            State.Confirm => BuildConfirmContent(),
+            State.Running => BuildRunningContent(),
+            State.Complete => BuildCompleteContent(),
+            State.Error => BuildErrorContent(),
             _ => new Markup(""),
         };
     }
 
-    private IRenderable BuildIdleContent(int availableHeight)
+    private IRenderable BuildIdleContent()
     {
         var content = new List<IRenderable>
         {
@@ -109,7 +109,7 @@ public sealed class UndoView : IAppView
         return new Rows(content);
     }
 
-    private IRenderable BuildConfirmContent(int availableHeight)
+    private IRenderable BuildConfirmContent()
     {
         var trashSessions = _sessions
             .Where(s => s.Action == "trash")
@@ -130,7 +130,7 @@ public sealed class UndoView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildRunningContent(int availableHeight)
+    private IRenderable BuildRunningContent()
     {
         var pct = _total > 0 ? (int)(_processed * 100.0 / _total) : 0;
         var bar = new string('█', pct / 5) + new string('░', 20 - pct / 5);
@@ -147,7 +147,7 @@ public sealed class UndoView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildCompleteContent(int availableHeight)
+    private IRenderable BuildCompleteContent()
     {
         var content = new List<IRenderable>
         {
@@ -160,7 +160,7 @@ public sealed class UndoView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildErrorContent(int availableHeight)
+    private IRenderable BuildErrorContent()
     {
         var content = new List<IRenderable>
         {

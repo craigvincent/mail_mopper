@@ -99,7 +99,7 @@ public sealed class ReviewView : IAppView
     {
         if (_subView == SubView.YearSelect)
         {
-            await HandleYearSelectInput(key, ct);
+            await HandleYearSelectInput(key);
             return ViewCommand.None;
         }
 
@@ -320,7 +320,7 @@ public sealed class ReviewView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private Task HandleYearSelectInput(ConsoleKeyInfo key, CancellationToken ct)
+    private Task HandleYearSelectInput(ConsoleKeyInfo key)
     {
         if (key.Key == ConsoleKey.UpArrow)
         {
@@ -658,7 +658,6 @@ public sealed class ReviewView : IAppView
 
         if (key.Key == ConsoleKey.LeftArrow)
         {
-            var totalPages = Math.Max(1, (int)Math.Ceiling((double)_senderEmails.Count / SenderPageSize));
             if (_senderPage > 0)
                 _senderPage--;
             return;

@@ -39,17 +39,17 @@ public sealed class ExecuteView : IAppView
     {
         return _state switch
         {
-            State.Idle => BuildIdleContent(availableHeight),
-            State.Preview => BuildPreviewContent(availableHeight),
-            State.Confirm => BuildConfirmContent(availableHeight),
-            State.Running => BuildRunningContent(availableHeight),
-            State.Complete => BuildCompleteContent(availableHeight),
-            State.Error => BuildErrorContent(availableHeight),
+            State.Idle => BuildIdleContent(),
+            State.Preview => BuildPreviewContent(),
+            State.Confirm => BuildConfirmContent(),
+            State.Running => BuildRunningContent(),
+            State.Complete => BuildCompleteContent(),
+            State.Error => BuildErrorContent(),
             _ => new Markup("")
         };
     }
 
-    private IRenderable BuildIdleContent(int availableHeight)
+    private IRenderable BuildIdleContent()
     {
         var content = new List<IRenderable>
         {
@@ -81,7 +81,7 @@ public sealed class ExecuteView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildPreviewContent(int availableHeight)
+    private IRenderable BuildPreviewContent()
     {
         RefreshPendingCounts();
         var content = new List<IRenderable>
@@ -97,7 +97,7 @@ public sealed class ExecuteView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildConfirmContent(int availableHeight)
+    private IRenderable BuildConfirmContent()
     {
         var content = new List<IRenderable>
         {
@@ -111,7 +111,7 @@ public sealed class ExecuteView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildRunningContent(int availableHeight)
+    private IRenderable BuildRunningContent()
     {
         var pct = _total > 0 ? (int)(_processed * 100.0 / _total) : 0;
         var bar = new string('█', pct / 5) + new string('░', 20 - pct / 5);
@@ -128,7 +128,7 @@ public sealed class ExecuteView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildCompleteContent(int availableHeight)
+    private IRenderable BuildCompleteContent()
     {
         var content = new List<IRenderable>
         {
@@ -149,7 +149,7 @@ public sealed class ExecuteView : IAppView
         return Align.Center(new Rows(content), VerticalAlignment.Middle);
     }
 
-    private IRenderable BuildErrorContent(int availableHeight)
+    private IRenderable BuildErrorContent()
     {
         var content = new List<IRenderable>
         {
