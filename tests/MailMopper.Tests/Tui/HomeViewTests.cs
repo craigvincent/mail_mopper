@@ -1,7 +1,7 @@
 using MailMopper.Services;
 using MailMopper.Tui.Views;
 
-namespace MailMopper.Tests;
+namespace MailMopper.Tests.Tui;
 
 public class HomeViewTests
 {

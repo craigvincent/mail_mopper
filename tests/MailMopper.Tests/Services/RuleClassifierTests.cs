@@ -2,7 +2,7 @@ using MailMopper.Config;
 using MailMopper.Models;
 using MailMopper.Services;
 
-namespace MailMopper.Tests;
+namespace MailMopper.Tests.Services;
 
 public class RuleClassifierTests : IDisposable
 {

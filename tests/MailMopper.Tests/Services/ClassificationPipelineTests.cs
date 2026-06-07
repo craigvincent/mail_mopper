@@ -4,7 +4,7 @@ using MailMopper.Models;
 using MailMopper.Services;
 using Microsoft.EntityFrameworkCore;
 
-namespace MailMopper.Tests;
+namespace MailMopper.Tests.Services;
 
 public class ClassificationPipelineTests : IDisposable
 {

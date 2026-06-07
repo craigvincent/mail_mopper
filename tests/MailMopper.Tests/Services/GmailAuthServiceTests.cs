@@ -1,7 +1,7 @@
 using MailMopper.Config;
 using MailMopper.Services;
 
-namespace MailMopper.Tests;
+namespace MailMopper.Tests.Services;
 
 public class GmailAuthServiceTests : IDisposable
 {

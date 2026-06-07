@@ -1,6 +1,6 @@
 using MailMopper.Tui;
 
-namespace MailMopper.Tests;
+namespace MailMopper.Tests.Tui;
 
 public class MailMopperAppTests
 {
