@@ -75,11 +75,13 @@ public sealed class HomeView(AppDbContext db, GmailSession session) : IAppView
         });
     }
 
-    private List<string> BuildNextSteps(EmailStats stats)
+    private List<string> BuildNextSteps(EmailStats stats) => BuildNextSteps(stats, _session.IsAuthenticated);
+
+    internal static List<string> BuildNextSteps(EmailStats stats, bool isAuthenticated)
     {
         var steps = new List<string>();
 
-        if (!_session.IsAuthenticated)
+        if (!isAuthenticated)
         {
             steps.Add("[yellow]Not authenticated[/] — press [bold]A[/] to authenticate with Gmail");
             return steps;

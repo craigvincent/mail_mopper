@@ -360,4 +360,10 @@ public class RuleClassifierTests : IDisposable
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public void RuleCount_AfterLoadingDefaultRules_ReturnsPositiveNumber()
+    {
+        Assert.True(_classifier.RuleCount > 0);
+    }
 }

@@ -479,19 +479,13 @@ public sealed class MailMopperApp
         _needsRender = true;
     }
 
-    private AppTab NextTab()
-    {
-        var current = (int)_currentTab;
-        var count = Tabs.Length;
-        return (AppTab)((current + 1) % count);
-    }
+    private AppTab NextTab() => NextTab(_currentTab);
 
-    private AppTab PreviousTab()
-    {
-        var current = (int)_currentTab;
-        var count = Tabs.Length;
-        return (AppTab)((current - 1 + count) % count);
-    }
+    private AppTab PreviousTab() => PreviousTab(_currentTab);
+
+    internal static AppTab NextTab(AppTab current) => (AppTab)(((int)current + 1) % Tabs.Length);
+
+    internal static AppTab PreviousTab(AppTab current) => (AppTab)(((int)current - 1 + Tabs.Length) % Tabs.Length);
 
     private static string FormatSize(long bytes) => ReviewService.FormatSize(bytes);
 }
