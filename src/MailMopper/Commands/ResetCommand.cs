@@ -5,16 +5,10 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class ResetCommand : AsyncCommand
+public class ResetCommand(AppSettings appSettings, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly AppSettings _appSettings;
-    private readonly AppCancellation _cancellation;
-
-    public ResetCommand(AppSettings appSettings, AppCancellation cancellation)
-    {
-        _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly AppSettings _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {

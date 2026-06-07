@@ -8,20 +8,12 @@ namespace MailMopper.Services;
 /// <summary>
 /// Orchestrates the full classification pipeline: rules → ML → human review.
 /// </summary>
-public class ClassificationPipeline
+public class ClassificationPipeline(RuleClassifier ruleClassifier, MlClassifier? mlClassifier, AppDbContext db, AppSettings settings)
 {
-    private readonly RuleClassifier _ruleClassifier;
-    private readonly MlClassifier? _mlClassifier;
-    private readonly AppDbContext _db;
-    private readonly AppSettings _settings;
-
-    public ClassificationPipeline(RuleClassifier ruleClassifier, MlClassifier? mlClassifier, AppDbContext db, AppSettings settings)
-    {
-        _ruleClassifier = ruleClassifier;
-        _mlClassifier = mlClassifier;
-        _db = db;
-        _settings = settings;
-    }
+    private readonly RuleClassifier _ruleClassifier = ruleClassifier;
+    private readonly MlClassifier? _mlClassifier = mlClassifier;
+    private readonly AppDbContext _db = db;
+    private readonly AppSettings _settings = settings;
 
     /// <summary>
     /// Runs the full classification pipeline for unclassified emails.
@@ -44,9 +36,9 @@ public class ClassificationPipeline
             .Where(e => !classifiedIds.Contains(e.MessageId))
             .ToListAsync(ct);
 
-        int totalEmails = unclassified.Count;
-        int ruleClassified = 0;
-        int aiClassified = 0;
+        var totalEmails = unclassified.Count;
+        var ruleClassified = 0;
+        var aiClassified = 0;
 
         // Phase 1: Rule classification
         if (unclassified.Count > 0)
@@ -91,8 +83,7 @@ public class ClassificationPipeline
         // Phase 1.5: Create Unclassified records for emails that didn't match any rule
         // This ensures ALL emails appear in the review TUI (especially Primary inbox)
         // Refresh classified IDs after Phase 1
-        classifiedIds = new HashSet<string>(
-            await _db.Classifications.Select(c => c.MessageId).ToListAsync(ct));
+        classifiedIds = [.. await _db.Classifications.Select(c => c.MessageId).ToListAsync(ct)];
         var stillUnclassified = await _db.Emails
             .Where(e => !classifiedIds.Contains(e.MessageId))
             .ToListAsync(ct);

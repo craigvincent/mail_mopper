@@ -4,8 +4,8 @@ using MailMopper.Data;
 using MailMopper.Infrastructure;
 using MailMopper.Services;
 using MailMopper.Tui;
+using MailMopper.Tui.Views;
 using Microsoft.Extensions.DependencyInjection;
-using Spectre.Console;
 using Spectre.Console.Cli;
 
 var version = typeof(Program).Assembly
@@ -27,16 +27,25 @@ var appSettings = CommandHelper.LoadSettings();
 services.AddSingleton(appSettings);
 services.AddSingleton(cancellation);
 services.AddSingleton<GmailSession>();
-services.AddSingleton(_ => new AppDbContext());
+services.AddTransient(_ => new AppDbContext());
 services.AddTransient<GmailAuthService>();
 services.AddTransient<RuleClassifier>();
 services.AddTransient<DatabaseService>();
 services.AddTransient<ModelTrainerService>();
+services.AddTransient<ReviewService>();
 services.AddTransient<ReviewApp>();
 services.AddTransient<GmailFetchService>();
 services.AddTransient<GmailServices>();
 services.AddTransient<IGmailApi, GmailApiWrapper>();
 services.AddTransient<ActionService>();
+
+services.AddSingleton<HomeView>();
+services.AddSingleton<FetchView>();
+services.AddSingleton<ClassifyView>();
+services.AddSingleton<ExecuteView>();
+services.AddSingleton<UndoView>();
+services.AddSingleton<ReviewView>();
+services.AddSingleton<MailMopperApp>();
 
 var app = new CommandApp(new TypeRegistrar(services));
 
@@ -77,28 +86,17 @@ app.Configure(config =>
 
     config.AddCommand<ResetCommand>("reset")
         .WithDescription("Wipe all local data and start fresh");
+
+    config.AddCommand<AppCommand>("app")
+        .WithDescription("Launch the unified TUI");
 });
 
-if (args.Length == 0 || args[0] is "-h" or "--help" or "-?" or "/?")
+if (args.Length == 0)
 {
-    AnsiConsole.Write(new Markup(@"[bold blue]8888ba.88ba           oo dP
-88  `8b  `8b             88
-88   88   88 .d8888b. dP 88
-88   88   88 88'  `88 88 88
-88   88   88 88.  .88 88 88
-dP   dP   dP `88888P8 dP dP
-
-
-8888ba.88ba
-88  `8b  `8b
-88   88   88 .d8888b. 88d888b. 88d888b. .d8888b. 88d888b.
-88   88   88 88'  `88 88'  `88 88'  `88 88ooood8 88'  `88
-88   88   88 88.  .88 88.  .88 88.  .88 88.  ... 88
-dP   dP   dP `88888P' 88Y888P' 88Y888P' `88888P' dP
-                      88       88
-                      dP       dP
-[/]"));
-    AnsiConsole.WriteLine();
+    var provider = services.BuildServiceProvider();
+    var appInstance = provider.GetRequiredService<MailMopperApp>();
+    await appInstance.RunAsync(cancellation.Token);
+    return 0;
 }
 
 return await app.RunAsync(args);

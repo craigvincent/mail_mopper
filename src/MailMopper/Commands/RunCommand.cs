@@ -20,26 +20,15 @@ public class RunSettings : CommandSettings
     public bool DryRun { get; set; }
 }
 
-public class RunCommand : AsyncCommand<RunSettings>
+public class RunCommand(GmailServices gmailServices, RuleClassifier ruleClassifier, ReviewApp reviewApp, ActionService actionService, AppDbContext dbContext, AppSettings appSettings, AppCancellation cancellation) : AsyncCommand<RunSettings>
 {
-    private readonly GmailServices _gmailServices;
-    private readonly RuleClassifier _ruleClassifier;
-    private readonly ReviewApp _reviewApp;
-    private readonly ActionService _actionService;
-    private readonly AppDbContext _dbContext;
-    private readonly AppSettings _appSettings;
-    private readonly AppCancellation _cancellation;
-
-    public RunCommand(GmailServices gmailServices, RuleClassifier ruleClassifier, ReviewApp reviewApp, ActionService actionService, AppDbContext dbContext, AppSettings appSettings, AppCancellation cancellation)
-    {
-        _gmailServices = gmailServices ?? throw new ArgumentNullException(nameof(gmailServices));
-        _ruleClassifier = ruleClassifier ?? throw new ArgumentNullException(nameof(ruleClassifier));
-        _reviewApp = reviewApp ?? throw new ArgumentNullException(nameof(reviewApp));
-        _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly GmailServices _gmailServices = gmailServices ?? throw new ArgumentNullException(nameof(gmailServices));
+    private readonly RuleClassifier _ruleClassifier = ruleClassifier ?? throw new ArgumentNullException(nameof(ruleClassifier));
+    private readonly ReviewApp _reviewApp = reviewApp ?? throw new ArgumentNullException(nameof(reviewApp));
+    private readonly ActionService _actionService = actionService ?? throw new ArgumentNullException(nameof(actionService));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppSettings _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context, RunSettings settings)
     {
@@ -61,7 +50,7 @@ public class RunCommand : AsyncCommand<RunSettings>
 
             // Step 2: Fetch
             AnsiConsole.MarkupLine("\n[bold]Step 2: Fetching Emails[/]");
-            int totalFetched = 0;
+            var totalFetched = 0;
 
             await AnsiConsole.Progress()
                 .StartAsync(async ctx =>

@@ -1,5 +1,6 @@
 using System.Globalization;
 using MailMopper.Models;
+using MailMopper.Services;
 using Spectre.Console;
 
 namespace MailMopper.Tui;
@@ -11,14 +12,14 @@ public partial class ReviewApp
 {
     private sealed class CategoryViewState
     {
-        public ClassificationGroup Group { get; set; } = null!;
+        public ReviewCategoryGroup Group { get; set; } = null!;
         public int CurrentPage { get; set; }
         public int LastSelectedIndex { get; set; } = -1;
         public bool HidingDecided { get; set; } = true;
         public bool Running { get; set; } = true;
     }
 
-    private async Task ShowCategoryAsync(ClassificationGroup group, CancellationToken ct)
+    private async Task ShowCategoryAsync(ReviewCategoryGroup group, CancellationToken ct)
     {
         var state = new CategoryViewState { Group = group };
 
@@ -31,15 +32,15 @@ public partial class ReviewApp
             await ProcessCategoryInputAsync(state, input, filteredSenders, totalPages, ct);
         }
 
-        UpdateGroupDecision(state.Group);
+        ReviewService.UpdateCategoryDecision(state.Group);
     }
 
-    private static (List<SenderGroup> filteredSenders, int totalPages, int startIdx, List<SenderGroup> pageSenders)
+    private static (List<ReviewSenderGroup> filteredSenders, int totalPages, int startIdx, List<ReviewSenderGroup> pageSenders)
         BuildCategoryPageData(CategoryViewState state)
     {
-        var allSenders = BuildSenderList(state.Group);
+        var allSenders = ReviewService.BuildSenderList(state.Group);
         var filteredSenders = state.HidingDecided
-            ? allSenders.Where(s => s.Decision == ReviewDecision.Pending).ToList()
+            ? [.. allSenders.Where(s => s.Decision == ReviewDecision.Pending)]
             : allSenders;
 
         var totalFiltered = filteredSenders.Count;
@@ -54,18 +55,18 @@ public partial class ReviewApp
 
     private void RenderCategoryPage(
         CategoryViewState state,
-        IList<SenderGroup> filteredSenders,
+        IList<ReviewSenderGroup> filteredSenders,
         int totalPages,
         int startIdx,
-        IList<SenderGroup> pageSenders)
+        IList<ReviewSenderGroup> pageSenders)
     {
-        var allSenders = BuildSenderList(state.Group);
+        var allSenders = ReviewService.BuildSenderList(state.Group);
         var totalPending = allSenders.Count(s => s.Decision == ReviewDecision.Pending);
         var totalDecided = allSenders.Count - totalPending;
         var totalFiltered = filteredSenders.Count;
         var endIdx = Math.Min(startIdx + PageSize, totalFiltered);
 
-        var yearInfo = _yearFilter.HasValue ? $" [cyan]({_yearFilter.Value})[/]" : "";
+        var yearInfo = _review.YearFilter.HasValue ? $" [cyan]({_review.YearFilter.Value})[/]" : "";
         AnsiConsole.Write(new Rule($"[bold blue]{state.Group.Category}[/]{yearInfo} — {state.Group.Classifications.Count:N0} emails, {allSenders.Count} senders").LeftJustified());
 
         var pct = allSenders.Count > 0 ? totalDecided * 100 / allSenders.Count : 100;
@@ -90,7 +91,7 @@ public partial class ReviewApp
 
     private static void RenderSenderTable(
         CategoryViewState state,
-        IList<SenderGroup> pageSenders,
+        IList<ReviewSenderGroup> pageSenders,
         int startIdx,
         int endIdx,
         int totalPages,
@@ -113,7 +114,6 @@ public partial class ReviewApp
         for (var i = 0; i < pageSenders.Count; i++)
         {
             var s = pageSenders[i];
-            var status = FormatDecision(s.Decision);
             var from = s.From.Length > 40 ? s.From[..37] + "..." : s.From;
             var displayNum = startIdx + i + 1;
             var marker = (startIdx + i) == state.LastSelectedIndex ? "[bold cyan]›[/]" : " ";
@@ -122,7 +122,7 @@ public partial class ReviewApp
                 Markup.Escape(from),
                 s.Classifications.Count.ToString("N0", CultureInfo.InvariantCulture),
                 Markup.Escape(s.Domain),
-                status);
+                ReviewService.FormatDecision(s.Decision));
         }
 
         AnsiConsole.Write(senderTable);
@@ -158,7 +158,7 @@ public partial class ReviewApp
     private async Task ProcessCategoryInputAsync(
         CategoryViewState state,
         string input,
-        List<SenderGroup> filteredSenders,
+        List<ReviewSenderGroup> filteredSenders,
         int totalPages,
         CancellationToken ct)
     {
@@ -215,9 +215,9 @@ public partial class ReviewApp
     private void HandleYearFilter(CategoryViewState state)
     {
         PromptYearFilter();
-        RebuildGroups();
+        _review.RebuildGroups();
 
-        var updatedGroup = _groups.FirstOrDefault(g => g.Category == state.Group.Category);
+        var updatedGroup = _review.Groups.FirstOrDefault(g => g.Category == state.Group.Category);
         if (updatedGroup == null || updatedGroup.Classifications.Count == 0)
         {
             state.Running = false;
@@ -236,22 +236,13 @@ public partial class ReviewApp
         string messageFormat,
         CancellationToken ct)
     {
-        var pending = state.Group.Classifications.Where(c => c.ReviewDecision == ReviewDecision.Pending).ToList();
-        if (pending.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[dim]No pending emails.[/]");
-            await Task.Delay(500, ct);
-            return;
-        }
-        foreach (var c in pending)
-            c.ReviewDecision = decision;
-        MarkDirty(pending.Count);
+        _review.ApplyBulkDecision(state.Group, decision);
         await AutoSaveIfNeeded(ct);
-        AnsiConsole.MarkupLine(string.Format(CultureInfo.InvariantCulture, messageFormat, pending.Count));
+        AnsiConsole.MarkupLine(string.Format(CultureInfo.InvariantCulture, messageFormat, state.Group.Classifications.Count(c => c.ReviewDecision == ReviewDecision.Pending)));
         await Task.Delay(400, ct);
     }
 
-    private bool TryHandleQuickDecision(CategoryViewState state, string trimmed, List<SenderGroup> filteredSenders)
+    private bool TryHandleQuickDecision(CategoryViewState state, string trimmed, List<ReviewSenderGroup> filteredSenders)
     {
         if (trimmed.Length < 2)
             return false;
@@ -265,15 +256,13 @@ public partial class ReviewApp
 
         var target = filteredSenders[quickNum - 1];
         var decision = cmd == 'T' ? ReviewDecision.ApproveTrash : ReviewDecision.Keep;
-        foreach (var c in target.Classifications)
-            c.ReviewDecision = decision;
-        target.Decision = decision;
+        ReviewService.ApplySenderDecision(target, decision);
         MarkDirty(target.Classifications.Count);
 
         var label = decision == ReviewDecision.ApproveTrash ? "[red]trash[/]" : "[green]keep[/]";
         AnsiConsole.MarkupLine($"  → {Markup.Escape(target.From)}: {label} ({target.Classifications.Count} emails)");
 
-        state.LastSelectedIndex = FindNextPendingIndex(filteredSenders, quickNum - 1);
+        state.LastSelectedIndex = ReviewService.FindNextPendingIndex(filteredSenders, quickNum - 1);
         state.CurrentPage = state.LastSelectedIndex >= 0 ? state.LastSelectedIndex / PageSize : state.CurrentPage;
         return true;
     }
@@ -281,7 +270,7 @@ public partial class ReviewApp
     private async Task HandleSenderViewAsync(
         CategoryViewState state,
         int senderIndex,
-        List<SenderGroup> filteredSenders,
+        List<ReviewSenderGroup> filteredSenders,
         CancellationToken ct)
     {
         state.LastSelectedIndex = senderIndex;
@@ -290,23 +279,12 @@ public partial class ReviewApp
         if (result != SenderAction.Back)
         {
             await AutoSaveIfNeeded(ct);
-            state.LastSelectedIndex = FindNextPendingIndex(filteredSenders, senderIndex);
+            state.LastSelectedIndex = ReviewService.FindNextPendingIndex(filteredSenders, senderIndex);
             state.CurrentPage = state.LastSelectedIndex >= 0 ? state.LastSelectedIndex / PageSize : state.CurrentPage;
         }
         else
         {
             state.CurrentPage = senderIndex / PageSize;
         }
-    }
-
-    private static void UpdateGroupDecision(ClassificationGroup group)
-    {
-        group.Decision = group.Classifications switch
-        {
-            var c when c.All(x => x.ReviewDecision == ReviewDecision.ApproveTrash) => ReviewDecision.ApproveTrash,
-            var c when c.All(x => x.ReviewDecision == ReviewDecision.Keep) => ReviewDecision.Keep,
-            var c when c.All(x => x.ReviewDecision == ReviewDecision.Whitelisted) => ReviewDecision.Whitelisted,
-            _ => ReviewDecision.Pending,
-        };
     }
 }

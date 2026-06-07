@@ -7,18 +7,11 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class StatsCommand : AsyncCommand
+public class StatsCommand(DatabaseService databaseService, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly DatabaseService _databaseService;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public StatsCommand(DatabaseService databaseService, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly DatabaseService _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {
@@ -35,8 +28,10 @@ public class StatsCommand : AsyncCommand
             var categorySummary = await _databaseService.GetCategorySummaryAsync(ct);
 
             // Display overall stats
-            var statsTable = new Table();
-            statsTable.Title = new TableTitle("[bold]Overall Statistics[/]");
+            var statsTable = new Table
+            {
+                Title = new TableTitle("[bold]Overall Statistics[/]")
+            };
             statsTable.AddColumn("[bold]Metric[/]");
             statsTable.AddColumn("[bold]Value[/]", col => col.RightAligned());
 
@@ -51,8 +46,10 @@ public class StatsCommand : AsyncCommand
 
             // Display category breakdown
             AnsiConsole.MarkupLine("\n");
-            var categoryTable = new Table();
-            categoryTable.Title = new TableTitle("[bold]Category Breakdown[/]");
+            var categoryTable = new Table
+            {
+                Title = new TableTitle("[bold]Category Breakdown[/]")
+            };
             categoryTable.AddColumn("[bold]Category[/]");
             categoryTable.AddColumn("[bold]Count[/]", col => col.RightAligned());
             categoryTable.AddColumn("[bold]Percentage[/]", col => col.RightAligned());
@@ -84,8 +81,10 @@ public class StatsCommand : AsyncCommand
 
             if (topSenders.Count > 0)
             {
-                var sendersTable = new Table();
-                sendersTable.Title = new TableTitle("[bold]Top 10 Senders[/]");
+                var sendersTable = new Table
+                {
+                    Title = new TableTitle("[bold]Top 10 Senders[/]")
+                };
                 sendersTable.AddColumn("[bold]Email[/]");
                 sendersTable.AddColumn("[bold]Count[/]", col => col.RightAligned());
 

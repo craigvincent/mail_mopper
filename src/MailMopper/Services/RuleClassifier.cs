@@ -25,6 +25,8 @@ public class RuleClassifier
     private List<Rule> _rules = [];
     private readonly Dictionary<string, Regex> _compiledRegexCache = [];
 
+    public int RuleCount => _rules.Count;
+
     public RuleClassifier(AppSettings appSettings)
     {
         _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));

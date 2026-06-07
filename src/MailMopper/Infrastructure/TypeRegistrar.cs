@@ -3,14 +3,9 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Infrastructure;
 
-public sealed class TypeRegistrar : ITypeRegistrar
+public sealed class TypeRegistrar(IServiceCollection builder) : ITypeRegistrar
 {
-    private readonly IServiceCollection _builder;
-
-    public TypeRegistrar(IServiceCollection builder)
-    {
-        _builder = builder ?? throw new ArgumentNullException(nameof(builder));
-    }
+    private readonly IServiceCollection _builder = builder ?? throw new ArgumentNullException(nameof(builder));
 
     public ITypeResolver Build() =>
         new TypeResolver(_builder.BuildServiceProvider());

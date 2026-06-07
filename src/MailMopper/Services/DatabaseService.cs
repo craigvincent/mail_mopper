@@ -7,24 +7,16 @@ namespace MailMopper.Services;
 /// <summary>
 /// Service for common database operations.
 /// </summary>
-public class DatabaseService
+public class DatabaseService(AppDbContext db)
 {
-    private readonly AppDbContext _db;
-
-    public DatabaseService(AppDbContext db)
-    {
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-    }
+    private readonly AppDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
 
     /// <summary>
     /// Ensures the database is created and schema is up to date.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task EnsureCreatedAsync(CancellationToken ct)
-    {
-        await _db.Database.EnsureCreatedAsync(ct);
-    }
+    public async Task EnsureCreatedAsync(CancellationToken ct) => await _db.Database.EnsureCreatedAsync(ct);
 
     /// <summary>
     /// Gets overall email statistics.
@@ -112,8 +104,8 @@ public class DatabaseService
             .GroupBy(c => new { Email = c.Email!.From, Domain = c.Email.FromDomain })
             .Select(g => new
             {
-                Email = g.Key.Email,
-                Domain = g.Key.Domain,
+                g.Key.Email,
+                g.Key.Domain,
                 Count = g.Count(),
                 TotalSize = g.Sum(c => c.Email!.SizeEstimate),
                 FirstCategory = g.Min(c => c.Category)
@@ -167,7 +159,7 @@ public class DatabaseService
         if (string.IsNullOrWhiteSpace(pattern))
             throw new ArgumentException("Pattern cannot be empty.", nameof(pattern));
 
-        if (patternType != "domain" && patternType != "email")
+        if (patternType is not "domain" and not "email")
             throw new ArgumentException("Pattern type must be 'domain' or 'email'.", nameof(patternType));
 
         // Check if already exists

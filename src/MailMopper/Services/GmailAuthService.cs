@@ -6,18 +6,45 @@ using MailMopper.Config;
 
 namespace MailMopper.Services;
 
-public class GmailAuthService
+public class GmailAuthService(AppSettings settings, GmailSession session)
 {
-    private readonly AppSettings _settings;
-    private readonly GmailSession _session;
+    private readonly AppSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
-    public GmailAuthService(AppSettings settings, GmailSession session)
+    public async Task<bool> TryRestoreSessionAsync(CancellationToken ct)
     {
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
+        try
+        {
+            if (!File.Exists(_settings.Gmail.CredentialsPath))
+                return false;
+
+            var tokenPath = Path.Combine(_settings.Gmail.TokenPath, "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+            if (!File.Exists(tokenPath))
+                return false;
+
+            await AuthenticateAsync(ct);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
-    public async Task<GmailService> AuthenticateAsync(CancellationToken ct)
+    public void Logout()
+    {
+        _session.Service?.Dispose();
+        _session.Service = null;
+
+        var tokenDir = _settings.Gmail.TokenPath;
+        if (Directory.Exists(tokenDir))
+        {
+            foreach (var file in Directory.GetFiles(tokenDir))
+                File.Delete(file);
+        }
+    }
+
+    public async Task<GmailService> AuthenticateAsync(CancellationToken ct, Action<string>? onAuthUrl = null)
     {
         if (!File.Exists(_settings.Gmail.CredentialsPath))
         {
@@ -36,7 +63,7 @@ public class GmailAuthService
             var authCallbackPort = _settings.Gmail.AuthCallbackPort;
             if (authCallbackPort > 0)
             {
-                var receiver = new LoopbackCodeReceiver(authCallbackPort);
+                var receiver = new LoopbackCodeReceiver(authCallbackPort, onAuthUrl);
                 credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
                     secrets,
                     _settings.Gmail.Scopes,

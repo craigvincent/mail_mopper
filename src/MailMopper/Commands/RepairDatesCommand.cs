@@ -5,20 +5,12 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class RepairDatesCommand : AsyncCommand
+public class RepairDatesCommand(GmailAuthService authService, GmailFetchService fetchService, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly GmailAuthService _authService;
-    private readonly GmailFetchService _fetchService;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public RepairDatesCommand(GmailAuthService authService, GmailFetchService fetchService, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly GmailAuthService _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+    private readonly GmailFetchService _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {

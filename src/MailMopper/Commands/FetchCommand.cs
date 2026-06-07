@@ -14,20 +14,12 @@ public class FetchSettings : CommandSettings
     public bool FullFetch { get; set; }
 }
 
-public class FetchCommand : AsyncCommand<FetchSettings>
+public class FetchCommand(GmailAuthService authService, GmailFetchService fetchService, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand<FetchSettings>
 {
-    private readonly GmailAuthService _authService;
-    private readonly GmailFetchService _fetchService;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public FetchCommand(GmailAuthService authService, GmailFetchService fetchService, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly GmailAuthService _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+    private readonly GmailFetchService _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context, FetchSettings settings)
     {
@@ -48,7 +40,7 @@ public class FetchCommand : AsyncCommand<FetchSettings>
             await _dbContext.Database.EnsureCreatedAsync(ct);
 
             // Determine fetch strategy
-            bool isFullFetch = settings.FullFetch;
+            var isFullFetch = settings.FullFetch;
             if (!isFullFetch)
             {
                 var lastSync = await _dbContext.SyncStates
@@ -64,7 +56,7 @@ public class FetchCommand : AsyncCommand<FetchSettings>
             var startTime = DateTime.UtcNow;
 
             // Fetch with progress
-            int totalFetched = 0;
+            var totalFetched = 0;
             await AnsiConsole.Progress()
                 .StartAsync(async ctx =>
                 {

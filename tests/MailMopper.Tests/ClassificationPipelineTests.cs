@@ -91,7 +91,7 @@ public class ClassificationPipelineTests : IDisposable
 
         var pipeline = new ClassificationPipeline(_ruleClassifier, mlClassifier: null, _db, _settings);
         var statuses = new List<string>();
-        Action<string> onStatus = s => statuses.Add(s);
+        void onStatus(string s) => statuses.Add(s);
 
         var summary = await pipeline.RunAsync(skipMl: false, onStatus: onStatus, CancellationToken.None);
 
@@ -127,7 +127,7 @@ public class ClassificationPipelineTests : IDisposable
 
         var pipeline = new ClassificationPipeline(_ruleClassifier, mlClassifier: null, _db, _settings);
         var statuses = new List<string>();
-        Action<string> onStatus = s => statuses.Add(s);
+        void onStatus(string s) => statuses.Add(s);
 
         await pipeline.RunAsync(skipMl: true, onStatus: onStatus, CancellationToken.None);
 
@@ -226,7 +226,7 @@ public class ClassificationPipelineTests : IDisposable
 
         var pipeline = new ClassificationPipeline(_ruleClassifier, mlClassifier: null, _db, _settings);
         var statuses = new List<string>();
-        Action<string> onStatus = s => statuses.Add(s);
+        void onStatus(string s) => statuses.Add(s);
 
         await pipeline.RunAsync(skipMl: true, onStatus: onStatus, CancellationToken.None);
 

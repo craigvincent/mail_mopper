@@ -7,21 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MailMopper.Services;
 
-public class GmailFetchService
+public partial class GmailFetchService(
+    GmailSession session,
+    AppDbContext dbContext,
+    AppSettings appSettings)
 {
-    private readonly AppDbContext _dbContext;
-    private readonly AppSettings _appSettings;
-    private readonly GmailSession _session;
-
-    public GmailFetchService(
-        GmailSession session,
-        AppDbContext dbContext,
-        AppSettings appSettings)
-    {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-    }
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppSettings _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     private GmailService GetGmailService() =>
         _session.Service ?? throw new InvalidOperationException("GmailSession not authenticated. Call AuthenticateAsync first.");
@@ -60,7 +53,7 @@ public class GmailFetchService
         Console.WriteLine($"Found {allMessageIds.Count} total messages, {newMessageIds.Count} new to fetch.");
 
         // Step 2: Fetch message details in sequential batches with rate limiting
-        int savedCount = await FetchAndSaveMessagesAsync(
+        var savedCount = await FetchAndSaveMessagesAsync(
             newMessageIds, progress, existingIds.Count, allMessageIds.Count, ct);
 
         // Update SyncState
@@ -124,7 +117,7 @@ public class GmailFetchService
         // Deduplicate and filter out already-fetched
         var existingIds = new HashSet<string>(
             await _dbContext.Emails.Select(e => e.MessageId).ToListAsync(ct));
-        newMessageIds = newMessageIds.Distinct().Where(id => !existingIds.Contains(id)).ToList();
+        newMessageIds = [.. newMessageIds.Distinct().Where(id => !existingIds.Contains(id))];
 
         Console.WriteLine($"Found {newMessageIds.Count} new messages to fetch.");
 
@@ -179,8 +172,8 @@ public class GmailFetchService
                 var message = await getRequest.ExecuteAsync(ct);
                 pendingRecords.Add(ParseEmailRecord(message));
             }
-            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.TooManyRequests
-                || ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden)
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode is System.Net.HttpStatusCode.TooManyRequests
+                or System.Net.HttpStatusCode.Forbidden)
             {
                 Console.WriteLine($"Rate limited at message {i + 1}. Waiting 60 seconds...");
                 await Task.Delay(TimeSpan.FromSeconds(60), ct);
@@ -218,7 +211,7 @@ public class GmailFetchService
                 .Select(e => e.MessageId)
                 .ToListAsync(ct));
 
-        int added = 0;
+        var added = 0;
         foreach (var record in records)
         {
             if (!existingIds.Contains(record.MessageId))
@@ -273,10 +266,10 @@ public class GmailFetchService
 
         onStatus?.Invoke($"Found {suspect.Count} emails with dates matching fetch time. Re-fetching from Gmail...");
 
-        int repaired = 0;
-        int errors = 0;
+        var repaired = 0;
+        var errors = 0;
 
-        for (int i = 0; i < suspect.Count; i++)
+        for (var i = 0; i < suspect.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
 
@@ -295,8 +288,8 @@ public class GmailFetchService
                     repaired++;
                 }
             }
-            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.TooManyRequests
-                || ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden)
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode is System.Net.HttpStatusCode.TooManyRequests
+                or System.Net.HttpStatusCode.Forbidden)
             {
                 onStatus?.Invoke($"Rate limited at {i + 1}/{suspect.Count}. Waiting 60s...");
                 await Task.Delay(TimeSpan.FromSeconds(60), ct);
@@ -325,7 +318,7 @@ public class GmailFetchService
 
     internal static EmailRecord ParseEmailRecord(Message message)
     {
-        var headers = message.Payload?.Headers ?? new List<MessagePartHeader>();
+        var headers = message.Payload?.Headers ?? [];
         var headerDict = headers.ToDictionary(h => h.Name, h => h.Value, StringComparer.OrdinalIgnoreCase);
 
         var fromHeader = headerDict.TryGetValue("From", out var from) ? from : string.Empty;
@@ -336,7 +329,7 @@ public class GmailFetchService
         var hasListUnsubscribe = headerDict.ContainsKey("List-Unsubscribe");
 
         var gmailCategory = ExtractCategory(message.LabelIds);
-        var gmailLabels = string.Join(",", message.LabelIds ?? new List<string>());
+        var gmailLabels = string.Join(",", message.LabelIds ?? []);
 
         // Prefer InternalDate (epoch ms from Gmail, always accurate) over the Date header
         var parsedDate = ParseInternalDate(message.InternalDate)
@@ -360,12 +353,7 @@ public class GmailFetchService
         };
     }
 
-    internal static DateTimeOffset? ParseInternalDate(long? internalDateMs)
-    {
-        if (internalDateMs is > 0)
-            return DateTimeOffset.FromUnixTimeMilliseconds(internalDateMs.Value);
-        return null;
-    }
+    internal static DateTimeOffset? ParseInternalDate(long? internalDateMs) => internalDateMs is > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(internalDateMs.Value) : null;
 
     internal static string ExtractEmailDomain(string? fromHeader)
     {
@@ -383,10 +371,7 @@ public class GmailFetchService
                     emailPart = fromHeader.Substring(start + 1, end - start - 1);
             }
 
-            if (emailPart.Contains('@'))
-                return emailPart.Split('@')[1].Trim().ToLowerInvariant();
-
-            return string.Empty;
+            return emailPart.Contains('@') ? emailPart.Split('@')[1].Trim().ToLowerInvariant() : string.Empty;
         }
         catch
         {
@@ -403,7 +388,7 @@ public class GmailFetchService
             return result;
 
         // Strip trailing parenthetical timezone names: "(UTC)", "(PDT)", etc.
-        var cleaned = System.Text.RegularExpressions.Regex.Replace(dateStr, @"\s*\([^)]*\)\s*$", "").Trim();
+        var cleaned = MyRegex().Replace(dateStr, "").Trim();
         if (cleaned != dateStr && DateTimeOffset.TryParse(cleaned, out result))
             return result;
 
@@ -416,20 +401,21 @@ public class GmailFetchService
             "ddd, d MMM yyyy HH:mm:ss",
             "ddd, dd MMM yyyy HH:mm:ss",
         ];
-        if (DateTimeOffset.TryParseExact(cleaned, formats,
+        return DateTimeOffset.TryParseExact(cleaned, formats,
             System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AllowWhiteSpaces, out result))
-            return result;
-
-        return null;
+            System.Globalization.DateTimeStyles.AllowWhiteSpaces, out result)
+            ? result
+            : null;
     }
 
     private static string ExtractCategory(IList<string>? labelIds)
     {
-        if (labelIds == null || labelIds.Count == 0)
-            return string.Empty;
-
-        return labelIds.FirstOrDefault(l => l.StartsWith("CATEGORY_", StringComparison.OrdinalIgnoreCase))
+        return labelIds == null || labelIds.Count == 0
+            ? string.Empty
+            : labelIds.FirstOrDefault(l => l.StartsWith("CATEGORY_", StringComparison.OrdinalIgnoreCase))
             ?? string.Empty;
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s*\([^)]*\)\s*$")]
+    private static partial System.Text.RegularExpressions.Regex MyRegex();
 }

@@ -1,6 +1,6 @@
 using System.Globalization;
 using MailMopper.Models;
-using Microsoft.EntityFrameworkCore;
+using MailMopper.Services;
 using Spectre.Console;
 
 namespace MailMopper.Tui;
@@ -14,7 +14,7 @@ public partial class ReviewApp
 
     private const int SenderPageSize = 25;
 
-    private async Task<SenderAction> ShowSenderAsync(SenderGroup sender, CancellationToken ct)
+    private async Task<SenderAction> ShowSenderAsync(ReviewSenderGroup sender, CancellationToken ct)
     {
         var ordered = sender.Classifications.OrderByDescending(c => c.Email?.Date).ToList();
         var total = ordered.Count;
@@ -48,7 +48,7 @@ public partial class ReviewApp
         }
     }
 
-    private static void RenderSenderPage(SenderGroup sender, IList<Classification> ordered, int total, int page, int totalPages)
+    private static void RenderSenderPage(ReviewSenderGroup sender, IList<Classification> ordered, int total, int page, int totalPages)
     {
         AnsiConsole.Clear();
         AnsiConsole.Write(new Rule($"[bold blue]{Markup.Escape(sender.From)}[/] — {total} emails").LeftJustified());
@@ -66,7 +66,7 @@ public partial class ReviewApp
             var date = email?.Date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "-";
             var subject = email?.Subject ?? "-";
             subject = subject.Length > 70 ? subject[..67] + "..." : subject;
-            var size = FormatSize(email?.SizeEstimate ?? 0);
+            var size = ReviewService.FormatSize(email?.SizeEstimate ?? 0);
             emailTable.AddRow(date, Markup.Escape(subject), size);
         }
 
@@ -84,48 +84,26 @@ public partial class ReviewApp
         AnsiConsole.MarkupLine($"  {string.Join("  ", hints)}");
     }
 
-    private async Task<SenderAction?> HandleSenderKeyAsync(char action, SenderGroup sender, CancellationToken ct)
+    private async Task<SenderAction?> HandleSenderKeyAsync(char action, ReviewSenderGroup sender, CancellationToken ct)
     {
         if (action == 'T')
         {
-            ApplySenderDecision(sender, ReviewDecision.ApproveTrash);
+            ReviewService.ApplySenderDecision(sender, ReviewDecision.ApproveTrash);
+            MarkDirty(sender.Classifications.Count);
             return SenderAction.Decided;
         }
         if (action == 'K')
         {
-            ApplySenderDecision(sender, ReviewDecision.Keep);
+            ReviewService.ApplySenderDecision(sender, ReviewDecision.Keep);
+            MarkDirty(sender.Classifications.Count);
             return SenderAction.Decided;
         }
         if (action == 'W')
         {
-            await WhitelistSenderDomainAsync(sender, ct);
+            await _review.WhitelistDomainAsync(sender.Domain, sender, ct);
+            MarkDirty(sender.Classifications.Count);
             return SenderAction.Decided;
         }
         return action == 'B' ? SenderAction.Back : null;
-    }
-
-    private void ApplySenderDecision(SenderGroup sender, ReviewDecision decision)
-    {
-        foreach (var c in sender.Classifications)
-            c.ReviewDecision = decision;
-        sender.Decision = decision;
-        MarkDirty(sender.Classifications.Count);
-    }
-
-    private async Task WhitelistSenderDomainAsync(SenderGroup sender, CancellationToken ct)
-    {
-        var existing = await _db.Whitelist
-            .AnyAsync(w => w.Pattern == sender.Domain, ct);
-        if (!existing)
-        {
-            _db.Whitelist.Add(new WhitelistEntry
-            {
-                Pattern = sender.Domain,
-                PatternType = "domain",
-                CreatedAt = DateTimeOffset.UtcNow
-            });
-            await _db.SaveChangesAsync(ct);
-        }
-        ApplySenderDecision(sender, ReviewDecision.Whitelisted);
     }
 }

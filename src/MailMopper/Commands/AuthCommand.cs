@@ -5,20 +5,12 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class AuthCommand : AsyncCommand
+public class AuthCommand(GmailAuthService authService, GmailSession session, AppSettings appSettings, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly GmailAuthService _authService;
-    private readonly GmailSession _session;
-    private readonly AppSettings _appSettings;
-    private readonly AppCancellation _cancellation;
-
-    public AuthCommand(GmailAuthService authService, GmailSession session, AppSettings appSettings, AppCancellation cancellation)
-    {
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-        _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly GmailAuthService _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
+    private readonly AppSettings _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {

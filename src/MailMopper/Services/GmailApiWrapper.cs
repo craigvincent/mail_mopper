@@ -6,14 +6,9 @@ namespace MailMopper.Services;
 /// <summary>
 /// Production wrapper that delegates to the real Google GmailService.
 /// </summary>
-public class GmailApiWrapper : IGmailApi
+public class GmailApiWrapper(GmailSession session) : IGmailApi
 {
-    private readonly GmailSession _session;
-
-    public GmailApiWrapper(GmailSession session)
-    {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-    }
+    private readonly GmailSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
     private GmailService GetGmailService() =>
         _session.Service ?? throw new InvalidOperationException("GmailSession not authenticated. Call AuthenticateAsync first.");

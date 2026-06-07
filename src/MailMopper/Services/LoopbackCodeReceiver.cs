@@ -10,14 +10,10 @@ namespace MailMopper.Services;
 /// to the console instead of opening a browser. Works in headless and
 /// containerised environments when the port is forwarded to the host.
 /// </summary>
-public sealed class LoopbackCodeReceiver : ICodeReceiver
+public sealed class LoopbackCodeReceiver(int port, Action<string>? onUrlGenerated = null) : ICodeReceiver
 {
-    private readonly int _port;
-
-    public LoopbackCodeReceiver(int port)
-    {
-        _port = port;
-    }
+    private readonly int _port = port;
+    private readonly Action<string>? _onUrlGenerated = onUrlGenerated;
 
     public string RedirectUri => $"http://localhost:{_port}/authorize/";
 
@@ -26,16 +22,21 @@ public sealed class LoopbackCodeReceiver : ICodeReceiver
     {
         var authUri = url.Build().ToString();
 
+        _onUrlGenerated?.Invoke(authUri);
+
         using var listener = new HttpListener();
         listener.Prefixes.Add($"http://localhost:{_port}/authorize/");
         listener.Start();
 
-        Console.WriteLine();
-        Console.WriteLine("Open the following URL in your browser to authenticate:");
-        Console.WriteLine();
-        Console.WriteLine($"  {authUri}");
-        Console.WriteLine();
-        Console.WriteLine("Waiting for authorization...");
+        if (_onUrlGenerated == null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Open the following URL in your browser to authenticate:");
+            Console.WriteLine();
+            Console.WriteLine($"  {authUri}");
+            Console.WriteLine();
+            Console.WriteLine("Waiting for authorization...");
+        }
 
         var context = await listener.GetContextAsync().WaitAsync(taskCancellationToken);
 
@@ -59,9 +60,7 @@ public sealed class LoopbackCodeReceiver : ICodeReceiver
         }
 
         if (!string.Equals(state, url.State, StringComparison.Ordinal))
-        {
             return new AuthorizationCodeResponseUrl { Error = "state_mismatch" };
-        }
 
         return new AuthorizationCodeResponseUrl { Code = code };
     }

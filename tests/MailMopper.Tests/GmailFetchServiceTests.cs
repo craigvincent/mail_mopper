@@ -161,11 +161,11 @@ public class GmailFetchServiceTests
 
         if (headers != null)
         {
-            message.Payload.Headers = headers.Select(h => new MessagePartHeader
+            message.Payload.Headers = [.. headers.Select(h => new MessagePartHeader
             {
                 Name = h.Key,
                 Value = h.Value
-            }).ToList();
+            })];
         }
 
         return message;

@@ -5,18 +5,11 @@ using Spectre.Console.Cli;
 
 namespace MailMopper.Commands;
 
-public class TrainCommand : AsyncCommand
+public class TrainCommand(ModelTrainerService trainer, AppDbContext dbContext, AppCancellation cancellation) : AsyncCommand
 {
-    private readonly ModelTrainerService _trainer;
-    private readonly AppDbContext _dbContext;
-    private readonly AppCancellation _cancellation;
-
-    public TrainCommand(ModelTrainerService trainer, AppDbContext dbContext, AppCancellation cancellation)
-    {
-        _trainer = trainer ?? throw new ArgumentNullException(nameof(trainer));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    }
+    private readonly ModelTrainerService _trainer = trainer ?? throw new ArgumentNullException(nameof(trainer));
+    private readonly AppDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly AppCancellation _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override async Task<int> ExecuteAsync(CommandContext context)
     {

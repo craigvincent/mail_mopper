@@ -1,5 +1,6 @@
 using System.Globalization;
 using MailMopper.Models;
+using MailMopper.Services;
 using Spectre.Console;
 
 namespace MailMopper.Tui;
@@ -14,7 +15,7 @@ public partial class ReviewApp
         AnsiConsole.Clear();
         AnsiConsole.Write(new Rule("[bold blue]Gmail Cleanup — Review Dashboard[/]").LeftJustified());
 
-        var yearLabel = _yearFilter.HasValue ? $"[bold cyan]{_yearFilter.Value}[/]" : "[dim]All years[/]";
+        var yearLabel = _review.YearFilter.HasValue ? $"[bold cyan]{_review.YearFilter.Value}[/]" : "[dim]All years[/]";
         AnsiConsole.MarkupLine($"  Year filter: {yearLabel}");
         AnsiConsole.WriteLine();
 
@@ -39,12 +40,12 @@ public partial class ReviewApp
             .AddColumn("[bold]Top Domain[/]")
             .AddColumn("[bold]Progress[/]");
 
-        for (var i = 0; i < _groups.Count; i++)
+        for (var i = 0; i < _review.Groups.Count; i++)
         {
-            var g = _groups[i];
+            var g = _review.Groups[i];
             var count = g.Classifications.Count;
             var senderCount = g.Classifications.Select(c => c.Email?.From).Distinct().Count();
-            var size = FormatSize(g.Classifications.Sum(c => c.Email?.SizeEstimate ?? 0));
+            var size = ReviewService.FormatSize(g.Classifications.Sum(c => c.Email?.SizeEstimate ?? 0));
             var topDomain = g.Classifications
                 .GroupBy(c => c.Email?.FromDomain ?? "unknown")
                 .OrderByDescending(sg => sg.Count())
@@ -66,9 +67,10 @@ public partial class ReviewApp
         AnsiConsole.Write(table);
     }
 
-    private static string BuildCategoryProgressText(ClassificationGroup g, int decided, int count)
+    private static string BuildCategoryProgressText(ReviewCategoryGroup g, int decided, int count)
     {
         if (decided == count)
+        {
             return g.Decision switch
             {
                 ReviewDecision.ApproveTrash => "[red]\u2717 Trash[/]",
@@ -76,26 +78,29 @@ public partial class ReviewApp
                 ReviewDecision.Whitelisted => "[cyan]\u2713 Whitelisted[/]",
                 _ => "[green]\u2713 Done[/]"
             };
+        }
+
         if (decided > 0)
             return $"[yellow]{decided}/{count} reviewed[/]";
+
         return "[dim]Not started[/]";
     }
 
     private void RenderDashboardSummary()
     {
-        var totalRemaining = _groups.Sum(g => g.Classifications.Count);
-        var totalRemainingSize = _groups.Sum(static (ClassificationGroup g) => g.Classifications.Sum(static (Classification c) => c.Email?.SizeEstimate ?? 0));
-        var totalPendingEmails = _groups.Sum(static (ClassificationGroup g) => g.Classifications.Count(static (Classification c) => c.ReviewDecision == ReviewDecision.Pending));
-        var totalTrashEmails = _groups.Sum(static (ClassificationGroup g) => g.Classifications.Count(static (Classification c) => c.ReviewDecision == ReviewDecision.ApproveTrash));
-        var totalKeepEmails = _groups.Sum(static (ClassificationGroup g) => g.Classifications.Count(static (Classification c) => c.ReviewDecision == ReviewDecision.Keep));
+        var totalRemaining = _review.Groups.Sum((ReviewCategoryGroup g) => g.Classifications.Count);
+        var totalRemainingSize = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Sum<Classification>(static c => c.Email?.SizeEstimate ?? 0));
+        var totalPendingEmails = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Count<Classification>(static c => c.ReviewDecision == ReviewDecision.Pending));
+        var totalTrashEmails = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Count<Classification>(static c => c.ReviewDecision == ReviewDecision.ApproveTrash));
+        var totalKeepEmails = _review.Groups.Sum(static (ReviewCategoryGroup g) => g.Classifications.Count<Classification>(static c => c.ReviewDecision == ReviewDecision.Keep));
 
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"  [bold]Total:[/] {totalRemaining:N0} emails ({FormatSize(totalRemainingSize)})");
-        if (_previouslyTrashedCount > 0)
-            AnsiConsole.MarkupLine($"  [dim]Already executed:[/] {_previouslyTrashedCount:N0} emails ({FormatSize(_previouslyTrashedSize)})");
+        AnsiConsole.MarkupLine($"  [bold]Total:[/] {totalRemaining:N0} emails ({ReviewService.FormatSize(totalRemainingSize)})");
+        if (_review.PreviouslyTrashedCount > 0)
+            AnsiConsole.MarkupLine($"  [dim]Already executed:[/] {_review.PreviouslyTrashedCount:N0} emails ({ReviewService.FormatSize(_review.PreviouslyTrashedSize)})");
         AnsiConsole.MarkupLine($"  [yellow]Pending:[/] {totalPendingEmails:N0}  [red]Trash:[/] {totalTrashEmails:N0}  [green]Keep:[/] {totalKeepEmails:N0}");
-        if (_dirty)
-            AnsiConsole.MarkupLine($"  [dim italic]Unsaved changes ({_unsavedActions} actions)[/]");
+        if (_review.IsDirty)
+            AnsiConsole.MarkupLine($"  [dim italic]Unsaved changes ({_review.UnsavedActions} actions)[/]");
         AnsiConsole.WriteLine();
 
         var navHints = new List<string>
@@ -112,18 +117,18 @@ public partial class ReviewApp
     {
         if (input.Equals("S", StringComparison.OrdinalIgnoreCase))
         {
-            if (_dirty)
+            if (_review.IsDirty)
             {
-                await SaveAsync(ct);
+                await _review.SaveAsync(ct);
                 AnsiConsole.MarkupLine("[green]✓ Saved.[/]");
             }
             return false;
         }
         if (input.Equals("Q", StringComparison.OrdinalIgnoreCase))
         {
-            if (_dirty && AnsiConsole.Confirm("[yellow]You have unsaved changes. Save before quitting?[/]", defaultValue: true))
+            if (_review.IsDirty && AnsiConsole.Confirm("[yellow]You have unsaved changes. Save before quitting?[/]", defaultValue: true))
             {
-                await SaveAsync(ct);
+                await _review.SaveAsync(ct);
                 AnsiConsole.MarkupLine("[green]✓ Saved.[/]");
             }
             return false;
@@ -131,12 +136,12 @@ public partial class ReviewApp
         if (input.Equals("Y", StringComparison.OrdinalIgnoreCase))
         {
             PromptYearFilter();
-            RebuildGroups();
+            _review.RebuildGroups();
             return true;
         }
-        if (int.TryParse(input, out var catNum) && catNum >= 1 && catNum <= _groups.Count)
+        if (int.TryParse(input, out var catNum) && catNum >= 1 && catNum <= _review.Groups.Count)
         {
-            await ShowCategoryAsync(_groups[catNum - 1], ct);
+            await ShowCategoryAsync(_review.Groups[catNum - 1], ct);
             return true;
         }
 
