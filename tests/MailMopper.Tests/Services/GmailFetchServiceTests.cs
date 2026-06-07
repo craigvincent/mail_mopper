@@ -1,7 +1,7 @@
 using Google.Apis.Gmail.v1.Data;
 using MailMopper.Services;
 
-namespace MailMopper.Tests;
+namespace MailMopper.Tests.Services;
 
 public class GmailFetchServiceTests
 {
